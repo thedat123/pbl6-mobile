@@ -4,8 +4,13 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from "react";
 import * as Font from 'expo-font';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+
+import ChatListScreen from './screens/ChatListScreen';
 
 SplashScreen.preventAutoHideAsync();
+const Stack = createStackNavigator();
 
 export default function App() {
 
@@ -57,7 +62,13 @@ export default function App() {
       onLayout={onLayout}>
       <SafeAreaView>
 
-        <Text style={styles.label}>Hi everyone!</Text>
+        <NavigationContainer>
+
+          <Stack.Navigator>
+            <Stack.Screen name="Home" component={ChatListScreen} />
+          </Stack.Navigator>
+
+        </NavigationContainer>
 
       </SafeAreaView>
     </SafeAreaProvider>
