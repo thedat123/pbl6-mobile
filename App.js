@@ -60,7 +60,6 @@ export default function App() {
     <SafeAreaProvider
       style={styles.container}
       onLayout={onLayout}>
-      <SafeAreaView>
 
         <NavigationContainer>
 
@@ -70,7 +69,6 @@ export default function App() {
 
         </NavigationContainer>
 
-      </SafeAreaView>
     </SafeAreaProvider>
   );
 }
@@ -79,8 +77,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    justifyContent: 'center',
-    alignItems: 'center'
   },
   label: {
     color: 'black',
