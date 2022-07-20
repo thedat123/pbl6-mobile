@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Button } from 'react-native';
 
-const ChatListScreen = props => {
+const ChatScreen = props => {
     
     return <View style={styles.container}>
-        <Text>Chat list screen</Text>
-
-        <Button title='Go to chat screen' onPress={() => props.navigation.navigate("ChatScreen") } />
+        <Text>Chat screen</Text>
     </View>
 };
 
@@ -18,4 +16,4 @@ const styles = StyleSheet.create({
     }
 })
 
-export default ChatListScreen;
+export default ChatScreen;
