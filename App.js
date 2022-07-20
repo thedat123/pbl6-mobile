@@ -66,7 +66,10 @@ export default function App() {
 
           <Stack.Navigator>
             <Stack.Screen name="Home" component={ChatListScreen} />
-            <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} />
+            <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} options={{
+              headerTitle: "Settings",
+              headerBackTitle: "Back"
+            }} />
           </Stack.Navigator>
 
         </NavigationContainer>
