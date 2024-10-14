@@ -1,23 +1,27 @@
 import 'react-native-gesture-handler';
-import { StyleSheet, Text } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { AppRegistry, LogBox, StyleSheet, Text } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from "react";
 import * as Font from 'expo-font';
 import AppNavigator from './navigation/AppNavigator';
+import { Provider } from 'react-redux';
+import { MenuProvider } from 'react-native-popup-menu';
+import { store } from './store/store';
+
+LogBox.ignoreLogs(['AsyncStorage has been extracted']);
+// AsyncStorage.clear();
 
 SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-
   const [appIsLoaded, setAppIsLoaded] = useState(false);
 
   useEffect(() => {
-    
     const prepare = async () => {
       try {
         await Font.loadAsync({
-          "black": require("./assets/fonts//Roboto-Black.ttf"),
+          "black": require("./assets/fonts/Roboto-Black.ttf"),
           "blackItalic": require("./assets/fonts/Roboto-BlackItalic.ttf"),
           "bold": require("./assets/fonts/Roboto-Bold.ttf"),
           "boldItalic": require("./assets/fonts/Roboto-BoldItalic.ttf"),
@@ -30,11 +34,9 @@ export default function App() {
           "thin": require("./assets/fonts/Roboto-Thin.ttf"),
           "thinItalic": require("./assets/fonts/Roboto-ThinItalic.ttf"),
         });
-      }
-      catch (error) {
-        console.log.error();
-      }
-      finally {
+      } catch (error) {
+        console.error("Error loading fonts:", error);
+      } finally {
         setAppIsLoaded(true);
       }
     };
@@ -53,13 +55,13 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider
-      style={styles.container}
-      onLayout={onLayout}>
-
-        <AppNavigator />
-
-    </SafeAreaProvider>
+    <Provider store={store}>
+      <SafeAreaProvider style={styles.container} onLayout={onLayout}>
+        <MenuProvider>
+          <AppNavigator />
+        </MenuProvider>
+      </SafeAreaProvider>
+    </Provider>
   );
 }
 
