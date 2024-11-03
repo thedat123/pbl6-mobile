@@ -1,16 +1,27 @@
-const { getDefaultConfig } = require("@expo/metro-config");
+const { getDefaultConfig } = require('expo/metro-config');
+
 const config = getDefaultConfig(__dirname);
 
-//Fixes
-config.resolver.sourceExts.push("cjs");
+const { transformer, resolver } = config;
 
-config.resolver.sourceExts = process.env.RN_SRC_EXT
-  ? [
-      ...process.env.RN_SRC_EXT.split(",").concat(config.resolver.sourceExts),
-      "cjs",
-    ] // <-- cjs added here
-  : [...config.resolver.sourceExts, "cjs"]; // <-- cjs added here
+// Configure the transformer for SVG and hashAssetFiles for font and other assets
+config.transformer = {
+  ...transformer,
+  babelTransformerPath: require.resolve('react-native-svg-transformer'),
+  assetPlugins: ['expo-asset/tools/hashAssetFiles'],
+  getTransformOptions: async () => ({
+    transform: {
+      experimentalImportSupport: false,
+      inlineRequires: true,
+    },
+  }),
+};
 
-config.resolver.sourceExts.push("js", "json", "ts", "tsx", "cjs");
+// Configure resolver to handle additional file extensions
+config.resolver = {
+  ...resolver,
+  assetExts: resolver.assetExts.filter(ext => ext !== 'svg').concat(['ttf', 'png', 'jpg', 'jpeg']),  // Handle fonts and images
+  sourceExts: [...resolver.sourceExts, 'svg'],  // Handle SVG files
+};
 
 module.exports = config;

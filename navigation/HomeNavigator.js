@@ -1,19 +1,55 @@
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View, ScrollView } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View, ScrollView, Dimensions } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
-import PageContainer from '../components/PageContainer'; // Assuming you have a custom PageContainer component
-import logo from '../assets/images/Home/home_main.png';
-import home_vocab from '../assets/images/Home/home_vocab.png';
-import card_image from '../assets/images/Home/card-img.png';
-import card_image2 from '../assets/images/Home/card-img_2.png';
-import card_image3 from '../assets/images/Home/card-img_3.png';
+import { LinearGradient } from 'expo-linear-gradient';
+import PageContainer from '../components/PageContainer';
+
+const { width, height } = Dimensions.get('window');
 
 const HomeNavigator = ({ navigation }) => {
-    const [currentPage, setCurrentPage] = useState('home'); // Track current page
+    const [currentPage, setCurrentPage] = useState('home');
 
     const handleGetStarted = () => setCurrentPage('anotherPage');
     const handleLearnMore = () => setCurrentPage('learnMorePage');
-    const handleBackToHome = () => setCurrentPage('home');
+    const handleBack = () => {
+        if (currentPage === 'learnMorePage') setCurrentPage('anotherPage');
+        else if (currentPage === 'anotherPage') setCurrentPage('home');
+    };
+
+    const Button = ({ onPress, text, style, primary = true }) => (
+        <TouchableOpacity 
+            onPress={onPress}
+            style={[
+                styles.button,
+                primary ? styles.primaryButton : styles.secondaryButton,
+                style
+            ]}
+            activeOpacity={0.8}
+        >
+            <Text style={[
+                styles.buttonText,
+                primary ? styles.primaryButtonText : styles.secondaryButtonText
+            ]}>
+                {text}
+            </Text>
+        </TouchableOpacity>
+    );
+
+    const Card = ({ imageUri, description }) => (
+        <View style={styles.card}>
+            <LinearGradient
+                colors={['#ffffff', '#f8f9fa']}
+                style={styles.cardGradient}
+            >
+                <Image
+                    style={styles.cardImage}
+                    source={{ uri: imageUri }}
+                    resizeMode="contain"
+                />
+                <Text style={styles.cardDescription}>{description}</Text>
+            </LinearGradient>
+        </View>
+    );
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -23,187 +59,241 @@ const HomeNavigator = ({ navigation }) => {
                         <View style={styles.imageContainer}>
                             <Image
                                 style={styles.logoImage}
-                                source={logo}
+                                source={{ uri: 'http://192.168.100.101:8081/assets/images/Home/home_main.png' }}
                                 resizeMode="contain"
                             />
                         </View>
-                        <View>
-                            <Text style={styles.heading}>Unlock Your English Potential with Us</Text>
-                            <Text style={styles.subHeading}>
-                                Welcome to our English Learning Website. Explore our features and enhance your vocabulary and TOEIC skills.
+                        <View style={styles.contentContainer}>
+                            <Text style={styles.heading}>
+                                Unlock Your English{'\n'}Potential with Us
                             </Text>
-                            <TouchableOpacity style={styles.button} onPress={handleGetStarted} accessibilityLabel="Explore our features">
-                                <Text style={styles.buttonText}>Explore</Text>
-                            </TouchableOpacity>
+                            <Text style={styles.subHeading}>
+                                Welcome to our comprehensive English Learning Platform. 
+                                Master vocabulary and ace your TOEIC exam with our 
+                                innovative learning tools.
+                            </Text>
+                            <Button 
+                                onPress={handleGetStarted} 
+                                text="Get Started" 
+                                style={styles.mainButton}
+                            />
                         </View>
                     </View>
                 )}
 
                 {currentPage === 'anotherPage' && (
-                    <ScrollView contentContainerStyle={styles.anotherPageContainer}>
-                        <View style={styles.imageContainer}>
-                            <Image
-                                style={styles.image}
-                                source={home_vocab}
-                                resizeMode="contain"
-                            />
+                    <ScrollView 
+                        contentContainerStyle={styles.anotherPageContainer}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Image
+                            style={styles.featureImage}
+                            source={{ uri: 'http://192.168.100.101:8081/assets/images/Home/home_vocab.png' }}
+                            resizeMode="contain"
+                        />
+                        <View style={styles.contentContainer}>
+                            <Text style={styles.anotherPageTitle}>
+                                Master Vocabulary with Interactive Flashcards
+                            </Text>
+                            <Text style={styles.anotherPageDescription}>
+                                Enhance your learning journey with our carefully crafted 
+                                flashcard system. Practice, review, and track your progress 
+                                as you build your vocabulary foundation.
+                            </Text>
+                            <View style={styles.buttonGroup}>
+                                <Button 
+                                    onPress={handleLearnMore} 
+                                    text="Learn More"
+                                />
+                                <Button 
+                                    onPress={handleBack} 
+                                    text="Back"
+                                    primary={false}
+                                />
+                            </View>
                         </View>
-                        <Text style={styles.anotherPageTitle}>Expand Your Vocabulary with Flashcards and Images</Text>
-                        <Text style={styles.anotherPageDescription}>
-                            Enhance your vocabulary learning experience with our interactive flashcards.
-                        </Text>
-                        <TouchableOpacity style={styles.backButton} onPress={handleLearnMore} accessibilityLabel="Learn more about vocabulary expansion">
-                            <Text style={styles.buttonText}>Learn More</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.backButton} onPress={handleBackToHome} accessibilityLabel="Back to home">
-                            <Text style={styles.buttonText}>Back to Home</Text>
-                        </TouchableOpacity>
                     </ScrollView>
                 )}
 
                 {currentPage === 'learnMorePage' && (
-                    <ScrollView contentContainerStyle={styles.learnMoreContainer}>
-                        <Text style={styles.learnMoreTitle}>Master Every Aspect of the TOEIC Exam</Text>
+                    <ScrollView 
+                        contentContainerStyle={styles.learnMoreContainer}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Text style={styles.learnMoreTitle}>
+                            Your Path to TOEIC Success
+                        </Text>
                         <View style={styles.cardContainer}>
-                            <View style={styles.card}>
-                                <Image
-                                    style={styles.cardImage}
-                                    source={card_image}
-                                    resizeMode="contain"
-                                />
-                                <Text style={styles.cardDescription}>Take Recent Actual TOEIC Tests</Text>
-                            </View>
-                            <View style={styles.card}>
-                                <Image
-                                    style={styles.cardImage}
-                                    source={card_image2}
-                                    resizeMode="contain"
-                                />
-                                <Text style={styles.cardDescription}>View TOEIC Score and Answer Explanations</Text>
-                            </View>
-                            <View style={styles.card}>
-                                <Image
-                                    style={styles.cardImage}
-                                    source={card_image3}
-                                    resizeMode="contain"
-                                />
-                                <Text style={styles.cardDescription}>Increase Your TOEIC Band Score</Text>
-                            </View>
+                            <Card
+                                imageUri="http://192.168.100.101:8081/assets/images/Home/card-img.png"
+                                description="Practice with Recent TOEIC Tests"
+                            />
+                            <Card
+                                imageUri="http://192.168.100.101:8081/assets/images/Home/card-img_2.png"
+                                description="Detailed Score Analysis & Explanations"
+                            />
+                            <Card
+                                imageUri="http://192.168.100.101:8081/assets/images/Home/card-img_3.png"
+                                description="Track Your Progress & Improvement"
+                            />
                         </View>
-                        <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Auth')} accessibilityLabel="Start practicing now">
-                            <Text style={styles.buttonText}>Start Practicing Now</Text>
-                        </TouchableOpacity>
+                        <View style={styles.buttonGroup}>
+                            <Button 
+                                onPress={() => navigation.navigate('LogIn')} 
+                                text="Start Learning Now"
+                            />
+                            <Button 
+                                onPress={handleBack} 
+                                text="Back"
+                                primary={false}
+                            />
+                        </View>
                     </ScrollView>
                 )}
             </PageContainer>
         </SafeAreaView>
     );
-}
+};
 
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: 'white',
+        backgroundColor: '#ffffff',
     },
     container: {
-        marginVertical: 20,
+        flex: 1,
+        justifyContent: 'space-between',
+        paddingHorizontal: width * 0.05,
+        paddingVertical: height * 0.03,
+    },
+    contentContainer: {
+        alignItems: 'center',
+        paddingHorizontal: width * 0.05,
     },
     heading: {
-        fontSize: 40,
-        fontWeight: 'bold',
+        fontSize: width * 0.08,
+        fontWeight: '800',
         textAlign: 'center',
-        color: '#203A90',
-        marginBottom: 20,
+        color: '#1a365d',
+        marginBottom: height * 0.02,
+        lineHeight: width * 0.1,
     },
     subHeading: {
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: width * 0.04,
         textAlign: 'center',
-        color: '#54565A',
-        marginBottom: 20,
+        color: '#4a5568',
+        marginBottom: height * 0.03,
+        lineHeight: width * 0.055,
     },
     imageContainer: {
-        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
+        marginVertical: height * 0.03,
     },
     logoImage: {
-        width: 400,
-        height: 400,
+        width: width * 0.8,
+        height: width * 0.8,
+    },
+    featureImage: {
+        width: width * 0.9,
+        height: width * 0.6,
+        marginBottom: height * 0.03,
     },
     button: {
-        backgroundColor: '#40B671',
-        paddingVertical: 15,
-        paddingHorizontal: 30,
-        borderRadius: 10,
-        alignSelf: 'center',
+        paddingVertical: height * 0.018,
+        paddingHorizontal: width * 0.08,
+        borderRadius: width * 0.03,
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    primaryButton: {
+        backgroundColor: '#4299e1',
+    },
+    secondaryButton: {
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: '#4299e1',
     },
     buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontSize: width * 0.04,
+        fontWeight: '600',
         textAlign: 'center',
+    },
+    primaryButtonText: {
+        color: '#ffffff',
+    },
+    secondaryButtonText: {
+        color: '#4299e1',
+    },
+    mainButton: {
+        width: width * 0.6,
+    },
+    buttonGroup: {
+        width: '100%',
+        gap: height * 0.02,
+        marginTop: height * 0.03,
     },
     anotherPageContainer: {
-        flex: 1,
-        justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        paddingVertical: height * 0.03,
     },
     anotherPageTitle: {
-        fontSize: 26,
-        fontWeight: 'bold',
-        color: '#203A90',
-        marginVertical: 10,
+        fontSize: width * 0.06,
+        fontWeight: '700',
+        color: '#1a365d',
+        marginBottom: height * 0.02,
         textAlign: 'center',
+        lineHeight: width * 0.08,
     },
     anotherPageDescription: {
-        fontSize: 17,
-        color: '#54565A',
+        fontSize: width * 0.04,
+        color: '#4a5568',
         textAlign: 'center',
-        marginBottom: 20,
-    },
-    backButton: {
-        backgroundColor: '#203A90',
-        paddingVertical: 12,
-        paddingHorizontal: 25,
-        borderRadius: 10,
-        marginTop: 20,
+        lineHeight: width * 0.055,
+        marginBottom: height * 0.02,
     },
     learnMoreContainer: {
-        flex: 1,
-        justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: width * 0.05,
     },
     learnMoreTitle: {
-        fontSize: 30,
-        marginBottom: 20,
+        fontSize: width * 0.07,
+        fontWeight: '700',
+        marginBottom: height * 0.03,
         textAlign: 'center',
-        color: '#203A90',
+        color: '#1a365d',
     },
     cardContainer: {
-        flexDirection: 'column',
-        alignItems: 'center',
         width: '100%',
-        paddingBottom: 20,
+        gap: height * 0.02,
+        marginBottom: height * 0.03,
     },
     card: {
-        borderRadius: 10,
-        padding: 20,
+        borderRadius: width * 0.04,
+        overflow: 'hidden',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.22,
+        shadowRadius: 2.22,
+    },
+    cardGradient: {
+        padding: width * 0.05,
         alignItems: 'center',
-        width: '90%',
     },
     cardImage: {
-        width: 100,
-        height: 100,
-        marginBottom: 10,
+        width: width * 0.25,
+        height: width * 0.25,
+        marginBottom: height * 0.02,
     },
     cardDescription: {
-        fontSize: 16,
-        color: '#54565A',
+        fontSize: width * 0.04,
+        fontWeight: '600',
+        color: '#2d3748',
         textAlign: 'center',
-    }
+    },
 });
 
 export default HomeNavigator;
