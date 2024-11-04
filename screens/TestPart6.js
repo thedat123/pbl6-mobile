@@ -113,61 +113,79 @@ const TestPart6 = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-            <QuestionNavigation
-                questions={questionData.flatMap(passage => passage.questions)}
-                questionStatus={questionStatus}
-                onQuestionPress={handleQuestionPress}
-            />
-        </View>
-        <ScrollView style={styles.scrollView}>
-            {questionData.map((passage, index) => (
-                <View key={index} style={styles.content}>
-                    <Text style={styles.title}>{passage.title}</Text>
-                    <Text style={styles.paragraph}>{passage.content}</Text>
-                    {passage.questions.map((question) => (
-                        <View key={question.id} style={styles.questionContainer}>
-                            <QuestionNumber number={question.id} />
-                            <QuestionOptions
-                                question={question}
-                                selectedAnswer={answers[question.id]}
-                                onAnswerSelect={handleAnswerSelect}
-                            />
-                        </View>
-                    ))}
+      <View style={styles.navigationWrapper}>
+        <QuestionNavigation
+          questions={questionData.flatMap(passage => passage.questions)}
+          questionStatus={questionStatus}
+          onQuestionPress={handleQuestionPress}
+        />
+      </View>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.contentWrapper}>
+          {questionData.map((passage, index) => (
+            <View key={index} style={styles.content}>
+              <Text style={styles.title}>{passage.title}</Text>
+              <Text style={styles.paragraph}>{passage.content}</Text>
+              {passage.questions.map((question) => (
+                <View key={question.id} style={styles.questionContainer}>
+                  <QuestionNumber number={question.id} />
+                  <QuestionOptions
+                    question={question}
+                    selectedAnswer={answers[question.id]}
+                    onAnswerSelect={handleAnswerSelect}
+                  />
                 </View>
-            ))}
-        </ScrollView>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     </SafeAreaView>
-
   );
 };
 
 const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: '#FFFFFF',
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  navigationWrapper: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 1000,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
     },
-    scrollView: {
-      flex: 1,
-    },
-    content: {
-      padding: 16,
-    },
-    title: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      marginBottom: 16,
-    },
-    paragraph: {
-      fontSize: 16,
-      lineHeight: 24,
-      marginBottom: 24,
-      color: '#333',
-    },
-    questionContainer: {
-      marginBottom: 24,
-    },
-  });
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5, // for Android
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentWrapper: {
+    paddingTop: 8, // Add some space below the sticky navigation
+  },
+  content: {
+    padding: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  paragraph: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 24,
+    color: '#333',
+  },
+  questionContainer: {
+    marginBottom: 24,
+  },
+});
 
 export default TestPart6;
