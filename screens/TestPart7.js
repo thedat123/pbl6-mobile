@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Modal } from 'react-native';
-import ImageViewing from 'react-native-image-viewing';
+import React, { forwardRef, useImperativeHandle, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
+import ImageViewing from 'react-native-image-viewing'; // Make sure you have installed this package
+import { QuestionNumber, QuestionOptions } from '../components/QuestionTest'; // Ensure these components are defined
 
-const TestPart7 = () => {
+const TestPart7 = forwardRef((props, ref) => {
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [isImageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
 
-  const data = [
+  const questionData = [
     {
       imageUrl: "https://lh6.googleusercontent.com/xaeQedCrz-uD-_tJEOcLFQtAj2k1nIdQcKTyNSP9_iM9h4VHkInFqgYYCIr7jw1q_6ja4zjIS6-gyPJPJa4VS80pwDkeBL3NzCzESM9-S6p-qp3Aepd_4WY1PZ1QT0_FnAy38se9",
       questions: [
@@ -15,57 +16,58 @@ const TestPart7 = () => {
           id: 147,
           questionText: "What is indicated about TriStar Sports Gear?",
           options: [
-            "A. It is a family business.",
-            "B. It is located next to a school.",
-            "C. It holds a sale every year.",
-            "D. It mainly sells weight training equipment."
+            { label: "A", text: "It is a family business." },
+            { label: "B", text: "It is located next to a school." },
+            { label: "C", text: "It holds a sale every year." },
+            { label: "D", text: "It mainly sells weight training equipment." }
           ]
         },
         {
           id: 148,
           questionText: "How can customers receive a discount on athletic shoes?",
           options: [
-            "A. By buying more than two pairs",
-            "B. By visiting on July 1",
-            "C. By placing an order online",
-            "D. By presenting a flyer"
+            { label: "A", text: "By buying more than two pairs" },
+            { label: "B", text: "By visiting on July 1" },
+            { label: "C", text: "By placing an order online" },
+            { label: "D", text: "By presenting a flyer" }
           ]
         }
-      ]
+      ],
     },
     {
       imageUrl: "https://lh6.googleusercontent.com/xaeQedCrz-uD-_tJEOcLFQtAj2k1nIdQcKTyNSP9_iM9h4VHkInFqgYYCIr7jw1q_6ja4zjIS6-gyPJPJa4VS80pwDkeBL3NzCzESM9-S6p-qp3Aepd_4WY1PZ1QT0_FnAy38se9",
       questions: [
         {
-          id: 149,
-          questionText: "What kind of movie did Phyllis think the group was going to see?",
+          id: 135,
+          questionText: "What does XYZ Company signify?",
           options: [
-            "A. Horror",
-            "B. Sci Fi",
-            "C. Comedy",
-            "D. Romance"
+            { label: "A", text: "growing" },
+            { label: "B", text: "shrinking" },
+            { label: "C", text: "stable" },
+            { label: "D", text: "declining" }
           ]
         },
         {
-          id: 150,
-          questionText: "Where did the group decide to meet?",
+          id: 136,
+          questionText: "What is a fact about XYZ Company?",
           options: [
-            "A. At the cinema",
-            "B. At a restaurant",
-            "C. At Sylvia's house",
-            "D. At the park"
+            { label: "A", text: "XYZ Company has been serving the community for over 20 years." },
+            { label: "B", text: "We are new to the area." },
+            { label: "C", text: "We have been facing financial difficulties." },
+            { label: "D", text: "XYZ Company is on the verge of closing down." }
           ]
-        }
-      ]
+        },
+      ],
     }
   ];
 
-  const handleSelectAnswer = (questionId, optionIndex) => {
-    setSelectedAnswers(prev => ({
-      ...prev,
-      [questionId]: optionIndex
-    }));
+  const handleSelectAnswer = (questionId, option) => {
+    setSelectedAnswers(prev => ({ ...prev, [questionId]: option }));
   };
+
+  useImperativeHandle(ref, () => ({
+    getQuestionData: () => questionData,
+  }));
 
   const openImageViewer = (imageUrl) => {
     setSelectedImage(imageUrl);
@@ -73,48 +75,30 @@ const TestPart7 = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {data.map((item, index) => (
-        <View key={index} style={styles.questionBlock}>
-          {/* Image Section */}
-          <View style={styles.imageContainer}>
-            <TouchableOpacity onPress={() => openImageViewer(item.imageUrl)}>
-              <Image
-                source={{ uri: item.imageUrl }}
-                style={styles.image}
-                resizeMode="contain"
-              />
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView}>
+        {questionData.map((item, index) => (
+          <View key={index} style={styles.questionBlock}>
+            {/* Image Section */}
+            <TouchableOpacity onPress={() => openImageViewer(item.imageUrl)} style={styles.imageContainer}>
+              <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="contain" />
             </TouchableOpacity>
-          </View>
 
-          {/* Questions Section */}
-          <View style={styles.questionsContainer}>
-            {item.questions.map((question, qIndex) => (
-              <View key={qIndex} style={styles.questionContainer}>
-                <Text style={styles.questionNumber}>Question {question.id}</Text>
-                <Text style={styles.questionText}>{question.questionText}</Text>
-                
-                <View style={styles.optionsContainer}>
-                  {question.options.map((option, optionIndex) => (
-                    <TouchableOpacity
-                      key={optionIndex}
-                      style={styles.optionButton}
-                      onPress={() => handleSelectAnswer(question.id, optionIndex)}
-                    >
-                      <View style={[
-                        styles.radio,
-                        selectedAnswers[question.id] === optionIndex && styles.radioSelected
-                      ]} />
-                      <Text style={styles.optionText}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+            {/* Questions Section */}
+            {item.questions.map((question) => (
+              <View key={question.id} style={styles.questionContainer}>
+                <QuestionNumber number={question.id} />
+                <QuestionOptions
+                  question={{ options: question.options }}
+                  selectedAnswer={selectedAnswers[question.id]}
+                  onAnswerSelect={handleSelectAnswer}
+                />
               </View>
             ))}
           </View>
-        </View>
-      ))}
-      
+        ))}
+      </ScrollView>
+
       {/* Image Viewer Modal */}
       <ImageViewing
         images={[{ uri: selectedImage }]}
@@ -122,14 +106,17 @@ const TestPart7 = () => {
         visible={isImageViewerVisible}
         onRequestClose={() => setImageViewerVisible(false)}
       />
-    </ScrollView>
+    </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
   },
   questionBlock: {
     backgroundColor: 'white',
@@ -146,61 +133,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   imageContainer: {
+    height: 250,
     backgroundColor: '#f8f8f8',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    padding: 10,
   },
   image: {
     width: '100%',
-    height: 250,
-    backgroundColor: '#fff',
-  },
-  questionsContainer: {
-    padding: 16,
+    height: '100%',
   },
   questionContainer: {
-    marginBottom: 24,
-  },
-  questionNumber: {
-    color: '#2196F3',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  questionText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 16,
-    lineHeight: 24,
-  },
-  optionsContainer: {
-    marginLeft: 8,
-  },
-  optionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  radio: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2196F3',
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioSelected: {
-    backgroundColor: '#2196F3',
-  },
-  optionText: {
-    fontSize: 16,
-    color: '#444',
-    flex: 1,
+    padding: 16,
   },
 });
 

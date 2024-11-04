@@ -19,6 +19,7 @@ import TestPart4 from '../screens/TestPart4';
 import TestPart5 from '../screens/TestPart5';
 import TestPart6 from '../screens/TestPart6';
 import TestPart7 from '../screens/TestPart7';
+import { QuestionNavigation } from './QuestionTest';
 
 const { width } = Dimensions.get('window');
 
@@ -29,23 +30,16 @@ const TestBase = () => {
   const [currentPart, setCurrentPart] = useState(selectedParts[0] || 1);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState({});
-  // Set initial time based on whether a time limit is selected
-  const initialTimeLeft = timeLimit ? timeLimit * 60 : 0; // Converts minutes to seconds
+  const initialTimeLeft = timeLimit ? timeLimit * 60 : 0;
   const [timeLeft, setTimeLeft] = useState(initialTimeLeft);
   const [questionStatus, setQuestionStatus] = useState({});
   const [isNavExpanded, setIsNavExpanded] = useState(false);
   const scrollViewRef = useRef(null);
+  const testPartRef = useRef({});
 
   useEffect(() => {
     const timer = setInterval(() => {
-      // If timeLimit is set, count down; otherwise, count up
-      setTimeLeft((prev) => {
-        if (timeLimit) {
-          return prev > 0 ? prev - 1 : 0; // Ensure it doesn't go below 0
-        } else {
-          return prev + 1; // Count up
-        }
-      });
+      setTimeLeft((prev) => (timeLimit ? (prev > 0 ? prev - 1 : 0) : prev + 1));
     }, 1000);
     return () => clearInterval(timer);
   }, [timeLimit]);
@@ -62,7 +56,7 @@ const TestBase = () => {
   };
 
   const handleQuestionPress = (questionId) => {
-    setCurrentQuestion(questionId - 1);
+    setCurrentQuestion(questionId);
     setQuestionStatus((prev) => ({ ...prev, [questionId]: 'viewed' }));
     scrollToTop();
   };
@@ -153,17 +147,24 @@ const TestBase = () => {
         )}
       </View>
     );
-  };  
+  };
+
+  const getAllQuestions = () => {
+    const allQuestions = selectedParts.flatMap(part =>
+      testPartRef.current[part]?.getQuestionData()?.flatMap(p => p.questions) || []
+    ).filter(question => question);
+    return allQuestions;
+  };
 
   const renderCurrentPart = () => {
     const parts = {
-      1: <TestPart1 />,
-      2: <TestPart2 />,
-      3: <TestPart3 />,
-      4: <TestPart4 />,
-      5: <TestPart5 />,
-      6: <TestPart6 />,
-      7: <TestPart7 />
+      1: <TestPart1 ref={(ref) => (testPartRef.current[1] = ref)} />,
+      2: <TestPart2 ref={(ref) => (testPartRef.current[2] = ref)} />,
+      3: <TestPart3 ref={(ref) => (testPartRef.current[3] = ref)} />,
+      4: <TestPart4 ref={(ref) => (testPartRef.current[4] = ref)} />,
+      5: <TestPart5 ref={(ref) => (testPartRef.current[5] = ref)} />,
+      6: <TestPart6 ref={(ref) => (testPartRef.current[6] = ref)} />,
+      7: <TestPart7 ref={(ref) => (testPartRef.current[7] = ref)} />,
     };
     return parts[currentPart] || <TestPart1 />;
   };
@@ -183,6 +184,13 @@ const TestBase = () => {
           </View>
         </View>
         {renderPartNav()}
+        <View style={styles.navigationWrapper}>
+          <QuestionNavigation
+            questions={getAllQuestions()}
+            questionStatus={questionStatus}
+            onQuestionPress={handleQuestionPress}
+          />
+        </View>
       </View>
 
       <ScrollView 
@@ -225,6 +233,20 @@ const styles = {
         elevation: 4,
       },
     }),
+  },
+  navigationWrapper: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 1000,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5, // for Android
   },
   headerContent: {
     flexDirection: 'row',
