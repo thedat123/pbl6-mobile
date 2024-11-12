@@ -16,6 +16,7 @@ import PracticeMode from "../components/PracticeMode";
 import FullMode from "../components/FullMode";
 import Comment from "../components/Comment";
 import ResultTestPageScreen from "../screens/ResultTestPageScreen";
+import ResultStatisticScreen from "../screens/ResultStatisticScreen";
 
 const Stack = createBottomTabNavigator();
 const MainAppNavigator = () => {

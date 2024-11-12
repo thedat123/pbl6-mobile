@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "whatsApp",
-    "slug": "whatsApp",
+    "name": "engFlash",
+    "slug": "engFlash",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -25,7 +25,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "package": "com.whatsappclone.whatsApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"

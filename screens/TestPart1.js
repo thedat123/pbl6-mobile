@@ -1,16 +1,16 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
 import { View, Text, Image, StyleSheet, SafeAreaView, ScrollView, Dimensions } from 'react-native';
 import AudioPlayer from '../components/AudioPlayer';
-import { QuestionNavigation, QuestionOptions } from '../components/QuestionTest';
+import { QuestionNavigation, QuestionNumber, QuestionOptions } from '../components/QuestionTest';
 
 const { height } = Dimensions.get('window');
 
-const TestPart1 = () => {
+const TestPart1 = forwardRef((props, ref) => {
   const [answers, setAnswers] = useState({});
   const [questionStatus, setQuestionStatus] = useState({});
   const scrollViewRef = useRef(null);
   
-  const questionGroups = [
+  const questionData = [
     {
       id: 1,
       questions: [
@@ -22,7 +22,12 @@ const TestPart1 = () => {
           image: {
             uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png',
           },
-          options: ['Statement A', 'Statement B', 'Statement C', 'Statement D'],
+          options: [
+            { label: 'A', text: 'Statement A' },
+            { label: 'B', text: 'Statement B' },
+            { label: 'C', text: 'Statement C' },
+            { label: 'D', text: 'Statement D' },
+          ],
         },
         {
           id: 2,
@@ -32,7 +37,12 @@ const TestPart1 = () => {
           image: {
             uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png',
           },
-          options: ['Statement A', 'Statement B', 'Statement C', 'Statement D'],
+          options: [
+            { label: 'A', text: 'Statement A' },
+            { label: 'B', text: 'Statement B' },
+            { label: 'C', text: 'Statement C' },
+            { label: 'D', text: 'Statement D' },
+          ],
         },
         {
           id: 3,
@@ -42,21 +52,20 @@ const TestPart1 = () => {
           image: {
             uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png',
           },
-          options: ['Statement A', 'Statement B', 'Statement C', 'Statement D'],
+          options: [
+            { label: 'A', text: 'Statement A' },
+            { label: 'B', text: 'Statement B' },
+            { label: 'C', text: 'Statement C' },
+            { label: 'D', text: 'Statement D' },
+          ],
         },
       ],
     },
-  ];
+  ];  
 
   const handleAnswerSelect = (questionId, option) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: option,
-    }));
-    setQuestionStatus(prev => ({
-      ...prev,
-      [questionId]: 'answered'
-    }));
+    setAnswers((prev) => ({ ...prev, [questionId]: option }));
+    setQuestionStatus((prev) => ({ ...prev, [questionId]: 'answered' }));
   };
 
   const handleQuestionPress = (questionId) => {
@@ -66,28 +75,20 @@ const TestPart1 = () => {
     }));
   };
 
+  useImperativeHandle(ref, () => ({
+    getQuestionData: () => questionData,
+  }));
+
   return (
     <SafeAreaView style={styles.container}>
-      <QuestionNavigation
-        questions={questionGroups[0].questions}
-        questionStatus={questionStatus}
-        onQuestionPress={handleQuestionPress}
-      />
-
       <ScrollView ref={scrollViewRef} style={styles.questionContainer}>
-        {questionGroups[0].questions.map((question) => (
+        {questionData[0].questions.map((question) => (
           <View key={question.id} style={styles.questionWrapper}>
-            <Text style={styles.questionTitle}>Question {question.id}</Text>
+            <QuestionNumber number={question.id} />
             <AudioPlayer audioUri={question.audio.uri} questionId={question.id} />
             <Image source={question.image} style={styles.questionImage} resizeMode="contain" />
             <QuestionOptions
-              question={{
-                id: question.id,
-                options: question.options.map((text, index) => ({
-                  label: String.fromCharCode(65 + index),
-                  text
-                }))
-              }}
+              question={question}
               selectedAnswer={answers[question.id]}
               onAnswerSelect={handleAnswerSelect}
             />
@@ -96,7 +97,7 @@ const TestPart1 = () => {
       </ScrollView>
     </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
