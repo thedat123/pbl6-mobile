@@ -4,7 +4,8 @@ import ImageViewing from 'react-native-image-viewing'; // Make sure you have ins
 import { QuestionNumber, QuestionOptions } from '../components/QuestionTest'; // Ensure these components are defined
 
 const TestPart7 = forwardRef((props, ref) => {
-  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [questionStatus, setQuestionStatus] = useState({});
+  const [answers, setAnswers] = useState({});
   const [isImageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
 
@@ -62,7 +63,8 @@ const TestPart7 = forwardRef((props, ref) => {
   ];
 
   const handleSelectAnswer = (questionId, option) => {
-    setSelectedAnswers(prev => ({ ...prev, [questionId]: option }));
+    setAnswers((prev) => ({ ...prev, [questionId]: option }));
+    setQuestionStatus((prev) => ({ ...prev, [questionId]: 'answered' }));
   };
 
   useImperativeHandle(ref, () => ({
@@ -89,8 +91,8 @@ const TestPart7 = forwardRef((props, ref) => {
               <View key={question.id} style={styles.questionContainer}>
                 <QuestionNumber number={question.id} />
                 <QuestionOptions
-                  question={{ options: question.options }}
-                  selectedAnswer={selectedAnswers[question.id]}
+                  question={{ id: question.id, question: question.questionText, options: question.options }}
+                  selectedAnswer={answers[question.id]}
                   onAnswerSelect={handleSelectAnswer}
                 />
               </View>

@@ -20,6 +20,8 @@ import TestPartSelector from '../components/TestPartSelector';
 import TestBase from '../components/TestBase';
 import MainNavigator from '../navigation/MainNavigator';
 import ResultTestPageScreen from '../screens/ResultTestPageScreen';
+import ResultStatisticScreen from '../screens/ResultStatisticScreen';
+import ScheduleScreen from '../screens/ScheduleScreen';
 
 
 const Stack = createStackNavigator(); // Create Stack Navigator
@@ -179,6 +181,27 @@ const MainAppRoute = () => {
           title: "Test Result",
         }} 
       />
+      <Stack.Screen 
+        name="ResultStatisticScreen"
+        component={ResultStatisticScreen}
+        options={{ 
+          title: "Result Statistics",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="ScheduleScreen"
+        component={ScheduleScreen}
+        options={{ 
+          title: "Schedule Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      
     </Stack.Navigator>
   );
 };

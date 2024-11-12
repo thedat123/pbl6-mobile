@@ -9,36 +9,34 @@ import {
   ScrollView,
   SafeAreaView,
   Modal,
-  Dimensions,
   ActivityIndicator,
-  StatusBar,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import * as ImagePicker from 'expo-image-picker';
-import { MaterialIcons } from '@expo/vector-icons';
+import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
-const { width } = Dimensions.get('window');
+// Constants
+const DEFAULT_AVATAR = 'http://192.168.100.101:8081/assets/images/Settings/default-user-avatar.png';
+const API_BASE_URL = 'http://10.0.2.2:3000/api/v1';
 
 const SettingsScreen = ({ navigation }) => {
+  // State Management
   const [activeTab, setActiveTab] = useState('Profile');
+  const [isLoading, setIsLoading] = useState(false);
+  const [profileImage, setProfileImage] = useState({ uri: DEFAULT_AVATAR });
+  
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
-    phone: '', // Initialize to the current date
+    phone: '',
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [profileImage, setProfileImage] = useState({
-    uri: 'http://192.168.100.101:8081/assets/images/Settings/default-user-avatar.png',
-  });
-  const [isLoading, setIsLoading] = useState(false);
+
   const [passwordForm, setPasswordForm] = useState({
     newPassword: '',
     confirmPassword: ''
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [modalConfig, setModalConfig] = useState({
+
+  const [modal, setModal] = useState({
     visible: false,
     title: '',
     message: '',
@@ -47,83 +45,69 @@ const SettingsScreen = ({ navigation }) => {
     showCancel: false,
   });
 
-  const showModal = (config) => {
-    setModalConfig({ ...config, visible: true });
-  };
-
+  // Effects
   useEffect(() => {
-    fetchDataFromToken();
+    loadUserData();
   }, []);
 
-  const fetchDataFromToken = async () => {
+  // API Functions
+  const loadUserData = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      if (token) {
-        const response = await fetch('http://10.0.2.2:3000/api/v1/auth/me', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+      if (!token) return;
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch user data');
-        }
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-        const data = await response.json();
-        // Update formData with the API response
-        setFormData({
-          fullName: data.name || '', // Assuming data has name field
-          email: data.email || '', // Assuming data has email field
-          phone: data.phone || '', // Assuming data has phone field
-        });
-      }
+      if (!response.ok) throw new Error('Failed to fetch user data');
+
+      const data = await response.json();
+      setFormData({
+        fullName: data.name || '',
+        email: data.email || '',
+        phone: data.phone || '',
+      });
     } catch (error) {
-      console.error('Error fetching user data from API:', error);
+      showAlert('Error', 'Failed to load user data', 'error');
     }
   };
 
-  const handleChangePassword = async () => {
+  const updatePassword = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      console.log('Token:', token);
-      if (token) {
-        const response = await fetch(`http://10.0.2.2:3000/api/v1/resetPassword/${token}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            password: passwordForm.newPassword,
-            passwordConfirm: passwordForm.confirmPassword,
-          }),
-        });
+      if (!token) throw new Error('No authentication token');
 
-        console.log('Response:', response);
+      const response = await fetch(`${API_BASE_URL}/resetPassword/${token}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: passwordForm.newPassword,
+          passwordConfirm: passwordForm.confirmPassword,
+        }),
+      });
 
-        if (!response.ok) {
-          throw new Error('Failed to updated password');
-        }
+      if (!response.ok) throw new Error('Failed to update password');
 
-        const data = await response.json();
-        console.log('Password updated successfully:', data);
-      }
+      showAlert('Success', 'Password updated successfully', 'success');
     } catch (error) {
-      console.error('Error updated password:', error);
+      showAlert('Error', 'Failed to update password', 'error');
     }
-  }
+  };
+
+  // UI Helper Functions
+  const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
+    setModal({ visible: true, title, message, type, showCancel, onConfirm });
+  };
 
   const handleImagePicker = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permissionResult.granted) {
-        showModal({
-          title: 'Permission Required',
-          message: 'Please enable photo library access in settings',
-          type: 'error'
-        });
+      const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!granted) {
+        showAlert('Permission Required', 'Please enable photo library access', 'error');
         return;
       }
 
@@ -138,34 +122,17 @@ const SettingsScreen = ({ navigation }) => {
         setProfileImage({ uri: result.assets[0].uri });
       }
     } catch (error) {
-      showModal({
-        title: 'Error',
-        message: 'Failed to select image',
-        type: 'error'
-      });
+      showAlert('Error', 'Failed to select image', 'error');
     }
   };
 
-  const handleSave = async () => {
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      showModal({
-        title: 'Success',
-        message: 'Changes saved successfully!',
-        type: 'success'
-      });
-    }, 1000);
-  };
-
   const handleLogout = () => {
-    showModal({
-      title: 'Logout',
-      message: 'Are you sure you want to logout?',
-      type: 'danger',
-      showCancel: true,
-      onConfirm: async () => {
+    showAlert(
+      'Logout',
+      'Are you sure you want to logout?',
+      'danger',
+      true,
+      async () => {
         try {
           await AsyncStorage.removeItem('token');
           navigation.reset({
@@ -173,24 +140,35 @@ const SettingsScreen = ({ navigation }) => {
             routes: [{ name: 'MainNavigator' }],
           });
         } catch (error) {
-          showModal({
-            title: 'Error',
-            message: 'Failed to logout',
-            type: 'error'
-          });
+          showAlert('Error', 'Failed to logout', 'error');
         }
       }
-    });
+    );
   };
 
-  const handleModalClose = () => {
-    setModalConfig(prev => ({ ...prev, visible: false }));
-  };
+  // UI Components
+  const StatButton = ({ icon, title, color, onPress }) => (
+    <TouchableOpacity 
+      style={[styles.statButton, { backgroundColor: color }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={styles.statButtonContent}>
+        <View style={styles.statButtonIcon}>
+          {icon}
+        </View>
+        <View style={styles.statButtonTextContainer}>
+          <Text style={styles.statButtonText}>{title}</Text>
+          <MaterialIcons name="chevron-right" size={24} color="#FFF" />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
-  const renderInputField = (iconName, label, value, onChangeText, inputProps = {}) => (
+  const InputField = ({ icon, label, value, onChangeText, ...props }) => (
     <View style={styles.inputContainer}>
       <View style={styles.iconWrapper}>
-        <MaterialIcons name={iconName} size={24} color="#666" />
+        <MaterialIcons name={icon} size={24} color="#000" />
       </View>
       <View style={styles.inputWrapper}>
         <Text style={styles.label}>{label}</Text>
@@ -200,29 +178,92 @@ const SettingsScreen = ({ navigation }) => {
             value={value}
             onChangeText={onChangeText}
             placeholderTextColor="#999"
-            {...inputProps}
+            {...props}
           />
         </View>
       </View>
     </View>
   );
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
-      <View style={styles.header}>
-        <Image source={{ uri: 'http://192.168.100.101:8081/assets/images/Settings/backgroundSettings.png' }} style={styles.coverImage} />
-        <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
-            <Image source={profileImage} style={styles.profileImage} />
-            <TouchableOpacity style={styles.editButton} onPress={handleImagePicker}>
-              <MaterialIcons name="edit" size={20} color="#4285F4" />
+  const AlertModal = () => (
+    <Modal
+      transparent
+      visible={modal.visible}
+      animationType="fade"
+      onRequestClose={() => setModal(prev => ({ ...prev, visible: false }))}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={[styles.modalHeader, styles[`${modal.type}Header`]]}>
+            <Text style={styles.modalTitle}>{modal.title}</Text>
+          </View>
+          <View style={styles.modalBody}>
+            <Text style={styles.modalMessage}>{modal.message}</Text>
+          </View>
+          <View style={styles.modalFooter}>
+            {modal.showCancel && (
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setModal(prev => ({ ...prev, visible: false }))}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={[styles.modalButton, styles.modalConfirmButton]}
+              onPress={() => {
+                setModal(prev => ({ ...prev, visible: false }));
+                modal.onConfirm();
+              }}
+            >
+              <Text style={styles.modalButtonText}>
+                {modal.type === 'danger' ? 'Logout' : 'OK'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
+    </Modal>
+  );
 
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView>
+        {/* Header Section */}
+        <View style={styles.header}>
+          <Image 
+            source={{ uri: 'http://192.168.100.101:8081/assets/images/Settings/backgroundSettings.png' }} 
+            style={styles.coverImage} 
+          />
+          
+          {/* Profile Image */}
+          <View style={styles.profileSection}>
+            <View style={styles.profileImageContainer}>
+              <Image source={profileImage} style={styles.profileImage} />
+              <TouchableOpacity style={styles.editButton} onPress={handleImagePicker}>
+                <MaterialIcons name="edit" size={20} color="#4285F4" />
+              </TouchableOpacity>
+            </View>
+          </View>
 
+          {/* Quick Action Buttons */}
+          <View style={styles.statButtonsContainer}>
+            <StatButton
+              icon={<MaterialIcons name="analytics" size={28} color="#FFF" />}
+              title="Learning Statistics"
+              color="#4A90E2"
+              onPress={() => navigation.navigate('ResultStatisticScreen')}
+            />
+            <StatButton
+              icon={<FontAwesome name="calendar" size={28} color="#FFF" />}
+              title="My Schedule"
+              color="#34A853"
+              onPress={() => navigation.navigate('ScheduleScreen')}
+            />
+          </View>
+        </View>
+
+        {/* Tab Navigation */}
         <View style={styles.tabs}>
           {['Profile', 'Password'].map(tab => (
             <TouchableOpacity
@@ -242,35 +283,53 @@ const SettingsScreen = ({ navigation }) => {
           ))}
         </View>
 
+        {/* Form Content */}
         <View style={styles.formContent}>
           {activeTab === 'Profile' ? (
             <>
-              {renderInputField("person", "Full Name", formData.fullName, 
-                (text) => setFormData(prev => ({ ...prev, fullName: text })))}
-              
-              {renderInputField("email", "Email", formData.email, 
-                (text) => setFormData(prev => ({ ...prev, email: text })), 
-                { keyboardType: 'email-address' })}
-
-              {renderInputField("phone", "Phone", formData.phone, 
-                (text) => setFormData(prev => ({ ...prev, phone: text })))}
-  
+              <InputField
+                icon="person"
+                label="Full Name"
+                value={formData.fullName}
+                onChangeText={text => setFormData(prev => ({ ...prev, fullName: text }))}
+              />
+              <InputField
+                icon="email"
+                label="Email"
+                value={formData.email}
+                onChangeText={text => setFormData(prev => ({ ...prev, email: text }))}
+                keyboardType="email-address"
+              />
+              <InputField
+                icon="phone"
+                label="Phone"
+                value={formData.phone}
+                onChangeText={text => setFormData(prev => ({ ...prev, phone: text }))}
+                keyboardType="phone-pad"
+              />
             </>
           ) : (
             <>
-              {renderInputField("lock", "New Password", passwordForm.newPassword,
-                (text) => setPasswordForm(prev => ({ ...prev, newPassword: text })),
-                { secureTextEntry: !showPassword })}
-
-              {renderInputField("lock-outline", "Confirm Password", passwordForm.confirmPassword,
-                (text) => setPasswordForm(prev => ({ ...prev, confirmPassword: text })),
-                { secureTextEntry: !showConfirmPassword })}
+              <InputField
+                icon="lock"
+                label="New Password"
+                value={passwordForm.newPassword}
+                onChangeText={text => setPasswordForm(prev => ({ ...prev, newPassword: text }))}
+                secureTextEntry
+              />
+              <InputField
+                icon="lock-outline"
+                label="Confirm Password"
+                value={passwordForm.confirmPassword}
+                onChangeText={text => setPasswordForm(prev => ({ ...prev, confirmPassword: text }))}
+                secureTextEntry
+              />
             </>
           )}
 
           <TouchableOpacity
             style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
-            onPress={activeTab === 'Profile' ? handleSave : handleChangePassword}
+            onPress={activeTab === 'Profile' ? loadUserData : updatePassword}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -287,6 +346,7 @@ const SettingsScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
+      {/* Logout Button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <MaterialIcons name="logout" size={24} color="#EA4335" />
@@ -294,44 +354,7 @@ const SettingsScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <Modal
-        transparent={true}
-        visible={modalConfig.visible}
-        animationType="fade"
-        onRequestClose={handleModalClose}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={[styles.modalHeader, styles[`${modalConfig.type}Header`]]}>
-              <Text style={styles.modalTitle}>{modalConfig.title}</Text>
-            </View>
-            <View style={styles.modalBody}>
-              <Text style={styles.modalMessage}>{modalConfig.message}</Text>
-            </View>
-            <View style={styles.modalFooter}>
-              {modalConfig.showCancel && (
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.modalCancelButton]} 
-                  onPress={handleModalClose}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.modalConfirmButton]} 
-                onPress={() => {
-                  handleModalClose();
-                  modalConfig.onConfirm();
-                }}
-              >
-                <Text style={styles.modalConfirmText}>
-                  {modalConfig.type === 'danger' ? 'Logout' : 'OK'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <AlertModal />
     </SafeAreaView>
   );
 };
@@ -342,7 +365,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F7FA',
   },
   header: {
-    height: 240,
+    height: 420,
     backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -395,17 +418,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 4,
-  },
-  username: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginTop: 12,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#5F6368',
-    marginTop: 4,
   },
   tabs: {
     flexDirection: 'row',
@@ -478,47 +490,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1A1A1A',
   },
-  dateField: {
-    borderWidth: 1,
-    borderColor: '#E8EAED',
-    borderRadius: 8,
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  dateText: {
-    fontSize: 16,
-    color: '#1A1A1A',
-  },
-  genderOptions: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  genderOption: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#F8F9FA',
-    borderWidth: 1,
-    borderColor: '#E8EAED',
-  },
-  selectedGender: {
-    backgroundColor: '#E8F0FE',
-    borderColor: '#4285F4',
-  },
-  genderText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#5F6368',
-  },
-  selectedGenderText: {
-    color: '#4285F4',
-    fontWeight: '500',
-  },
   saveButton: {
     backgroundColor: '#4285F4',
     borderRadius: 8,
@@ -566,6 +537,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -584,71 +556,175 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   modalHeader: {
-      padding: 20,
-      alignItems: 'center',
-      borderTopLeftRadius: 12,
-      borderTopRightRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   modalHeaderError: {
-      backgroundColor: '#EA4335',
+    backgroundColor: '#EA4335',
   },
   modalHeaderSuccess: {
-      backgroundColor: '#34A853',
+    backgroundColor: '#34A853',
   },
   modalHeaderDanger: {
-      backgroundColor: '#EA4335',
+    backgroundColor: '#EA4335',
   },
   modalHeaderWarning: {
-      backgroundColor: '#FBBC04',
+    backgroundColor: '#FBBC04',
   },
   modalTitle: {
-      fontSize: 18,
-      color: '#fff',
-      fontWeight: '600',
-      textAlign: 'center',
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   modalBody: {
-      padding: 24,
-      backgroundColor: '#fff',
+    padding: 24,
+    backgroundColor: '#fff',
   },
   modalMessage: {
-      fontSize: 16,
-      color: '#1A1A1A',
-      textAlign: 'center',
-      lineHeight: 24,
+    fontSize: 16,
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 24,
   },
   modalFooter: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      padding: 16,
-      gap: 12,
-      borderTopWidth: 1,
-      borderTopColor: '#E8EAED',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8EAED',
   },
   modalButton: {
-      paddingHorizontal: 24,
-      paddingVertical: 12,
-      borderRadius: 8,
-      minWidth: 100,
-      alignItems: 'center',
-      justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalConfirmButton: {
-      backgroundColor: '#34A853',
+    backgroundColor: '#34A853',
   },
   modalCancelButton: {
-      backgroundColor: '#EA4335',
+    backgroundColor: '#EA4335',
   },
-  modalConfirmText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '600',
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  modalCancelText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '600',
+  // Stat Button Styles
+  statButtonsContainer: {
+    padding: 16,
+    gap: 8,
+  },
+  statButton: {
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    marginBottom: 8,
+  },
+  statButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  statButtonIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  statButtonTextContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
   },
 });
+
+// Add form validation
+const validateForm = (data, type = 'profile') => {
+  const errors = {};
+  
+  if (type === 'profile') {
+    if (!data.fullName.trim()) {
+      errors.fullName = 'Full name is required';
+    }
+    
+    if (!data.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(data.email)) {
+      errors.email = 'Invalid email format';
+    }
+    
+    if (!data.phone.trim()) {
+      errors.phone = 'Phone number is required';
+    }
+  } else if (type === 'password') {
+    if (!data.newPassword) {
+      errors.newPassword = 'New password is required';
+    } else if (data.newPassword.length < 6) {
+      errors.newPassword = 'Password must be at least 6 characters';
+    }
+    
+    if (!data.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (data.newPassword !== data.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+  }
+  
+  return errors;
+};
+
+// Add error handling for API calls
+const handleApiError = (error) => {
+  let errorMessage = 'An unexpected error occurred';
+  
+  if (error.response) {
+    // Server responded with error
+    errorMessage = error.response.data.message || errorMessage;
+  } else if (error.request) {
+    // Request made but no response
+    errorMessage = 'Unable to connect to server';
+  }
+  
+  return errorMessage;
+};
+
+// Add loading state management
+const useLoading = (initialState = false) => {
+  const [isLoading, setIsLoading] = useState(initialState);
+  
+  const withLoading = async (callback) => {
+    setIsLoading(true);
+    try {
+      await callback();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  return [isLoading, withLoading];
+};
 
 export default SettingsScreen;

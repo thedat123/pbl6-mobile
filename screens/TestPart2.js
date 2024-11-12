@@ -1,16 +1,13 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Dimensions } from 'react-native';
+import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
+import { View, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import AudioPlayer from '../components/AudioPlayer';
-import { QuestionNavigation, QuestionOptions } from '../components/QuestionTest';
+import { QuestionNumber, QuestionOptions } from '../components/QuestionTest';
 
-const { height } = Dimensions.get('window');
-
-const TestPart2 = () => {
+const TestPart2 = forwardRef((props, ref) => {
   const [answers, setAnswers] = useState({});
   const [questionStatus, setQuestionStatus] = useState({});
-  const scrollViewRef = useRef(null);
   
-  const questionGroups = [
+  const questionData = [
     {
       id: 1,
       questions: [
@@ -19,65 +16,59 @@ const TestPart2 = () => {
           audio: {
             uri: 'http://192.168.100.101:8081/assets/audio/test_audio.mp3',
           },
-          options: ['Statement A', 'Statement B', 'Statement C', 'Statement D'],
+          options: [
+            { label: 'A', text: 'Statement A' },
+            { label: 'B', text: 'Statement B' },
+            { label: 'C', text: 'Statement C' },
+            { label: 'D', text: 'Statement D' },
+          ],
         },
         {
           id: 2,
           audio: {
             uri: 'http://192.168.100.101:8081/assets/audio/test_audio.mp3',
           },
-          options: ['Statement A', 'Statement B', 'Statement C', 'Statement D'],
+          options: [
+            { label: 'A', text: 'Statement A' },
+            { label: 'B', text: 'Statement B' },
+            { label: 'C', text: 'Statement C' },
+            { label: 'D', text: 'Statement D' },
+          ],
         },
         {
           id: 3,
           audio: {
             uri: 'http://192.168.100.101:8081/assets/audio/test_audio.mp3',
           },
-          options: ['Statement A', 'Statement B', 'Statement C', 'Statement D'],
+          options: [
+            { label: 'A', text: 'Statement A' },
+            { label: 'B', text: 'Statement B' },
+            { label: 'C', text: 'Statement C' },
+            { label: 'D', text: 'Statement D' },
+          ],
         },
       ],
     },
   ];
 
   const handleAnswerSelect = (questionId, option) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: option,
-    }));
-    setQuestionStatus(prev => ({
-      ...prev,
-      [questionId]: 'answered'
-    }));
+    setAnswers((prev) => ({ ...prev, [questionId]: option }));
+    setQuestionStatus((prev) => ({ ...prev, [questionId]: 'answered' }));
   };
 
-  const handleQuestionPress = (questionId) => {
-    setQuestionStatus(prev => ({
-      ...prev,
-      [questionId]: 'viewed'
-    }));
-  };
+  useImperativeHandle(ref, () => ({
+    getQuestionData: () => questionData,
+  }));
 
   return (
     <SafeAreaView style={styles.container}>
-      <QuestionNavigation
-        questions={questionGroups[0].questions}
-        questionStatus={questionStatus}
-        onQuestionPress={handleQuestionPress}
-      />
-
-      <ScrollView ref={scrollViewRef} style={styles.questionContainer}>
-        {questionGroups[0].questions.map((question) => (
+      <ScrollView style={styles.scrollView}>
+        {questionData[0].questions.map((question) => (
           <View key={question.id} style={styles.questionWrapper}>
-            <Text style={styles.questionTitle}>Question {question.id}</Text>
+            <QuestionNumber number={question.id} />
             <AudioPlayer audioUri={question.audio.uri} questionId={question.id} />
             <QuestionOptions
-              question={{
-                id: question.id,
-                options: question.options.map((text, index) => ({
-                  label: String.fromCharCode(65 + index),
-                  text
-                }))
-              }}
+              question={question}
               selectedAnswer={answers[question.id]}
               onAnswerSelect={handleAnswerSelect}
             />
@@ -86,24 +77,18 @@ const TestPart2 = () => {
       </ScrollView>
     </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  questionContainer: {
+  scrollView: {
     flex: 1,
-    padding: 16,
   },
   questionWrapper: {
     marginBottom: 16,
-  },
-  questionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
   },
 });
 

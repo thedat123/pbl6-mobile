@@ -13,7 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 
-const VocabCard = () => {
+const VocabCard = ({ word, level }) => {
   const navigation = useNavigation();
   const scaleValue = new Animated.Value(1);
 
@@ -31,6 +31,22 @@ const VocabCard = () => {
     }).start();
   };
 
+  // Set color and label based on level
+  const getLevelDetails = (level) => {
+    switch (level) {
+      case 'elementary':
+        return { color: '#4CAF50', text: 'Sơ cấp' };
+      case 'intermediate':
+        return { color: '#FF9800', text: 'Trung cấp' };
+      case 'advanced':
+        return { color: '#F44336', text: 'Cao cấp' };
+      default:
+        return { color: '#9E9E9E', text: 'Tất cả' };
+    }
+  };
+
+  const levelDetails = getLevelDetails(level);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <TouchableOpacity
@@ -43,52 +59,30 @@ const VocabCard = () => {
           styles.card,
           { transform: [{ scale: scaleValue }] }
         ]}>
-          {/* Image Section */}
           <View style={styles.imageContainer}>
             <Image
               source={{ uri: 'http://192.168.100.101:8081/assets/images/Vocab/vocab_image.png' }}
               style={styles.image}
               resizeMode="cover"
             />
-            <View style={styles.difficulty}>
+            <View style={[
+              styles.difficulty,
+              { backgroundColor: levelDetails.color }
+            ]}>
               <MaterialIcons name="signal-cellular-alt" size={16} color="#FFF" />
-              <Text style={styles.difficultyText}>Medium</Text>
+              <Text style={styles.difficultyText}>{levelDetails.text}</Text>
             </View>
           </View>
-
-          {/* Content Section */}
+          
           <View style={styles.contentContainer}>
-            <Text style={styles.title}>2024 Practice Set TOEIC Test 10</Text>
-            
-            {/* Tags Section */}
-            <View style={styles.tagContainer}>
-              <View style={[styles.tag, styles.tagBiology]}>
-                <MaterialIcons name="science" size={16} color="#FFF" />
-                <Text style={styles.tagText}>Biology</Text>
-              </View>
-              <View style={[styles.tag, styles.tagQuestions]}>
-                <MaterialIcons name="question-answer" size={16} color="#FFF" />
-                <Text style={styles.tagText}>50 Questions</Text>
-              </View>
-            </View>
-
-            {/* Footer Section */}
-            <View style={styles.footerContainer}>
-              <View style={styles.authorContainer}>
-                <MaterialIcons name="person" size={16} color="#666" />
-                <Text style={styles.footerText}>by EngFlash</Text>
-              </View>
-              <View style={styles.statsContainer}>
-                <MaterialIcons name="visibility" size={16} color="#666" />
-                <Text style={styles.statsText}>2.5k</Text>
-              </View>
-            </View>
+            <Text style={styles.title}>{word}</Text>
           </View>
         </Animated.View>
       </TouchableOpacity>
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safeArea: {

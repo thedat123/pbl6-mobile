@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   View,
   Dimensions,
   TouchableOpacity,
+  TextInput,
   Platform,
   StatusBar
 } from "react-native";
@@ -17,13 +18,53 @@ import colors from "../constants/colors";
 const { width, height } = Dimensions.get('window');
 
 const LEVELS = [
+  { id: 'all', label: 'Tất cả', color: '#9E9E9E' },
   { id: 'elementary', label: 'Sơ cấp', color: '#4CAF50' },
   { id: 'intermediate', label: 'Trung cấp', color: '#FF9800' },
   { id: 'advanced', label: 'Cao cấp', color: '#F44336' },
 ];
 
+const VOCAB_DATA = [
+  { id: 1, word: "Basic Word 1", level: 'elementary' },
+  { id: 2, word: "Intermediate Word 1", level: 'intermediate' },
+  { id: 3, word: "Advanced Word 1", level: 'advanced' },
+  { id: 4, word: "Basic Word 2", level: 'elementary' },
+  { id: 5, word: "Intermediate Word 2", level: 'intermediate' },
+  { id: 6, word: "Advanced Word 2", level: 'advanced' },
+];
+
 const HomeVocabScreen = () => {
-  const [selectedLevel, setSelectedLevel] = useState('elementary');
+  const [selectedLevel, setSelectedLevel] = useState('all');
+  const [searchText, setSearchText] = useState('');
+  const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    fetchDataFromToken();
+  }, []);
+
+  const fetchDataFromToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const response = await fetch('http://10.0.2.2:3000/api/v1/auth/me', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch user data');
+        }
+
+        const data = await response.json();
+        setUsername(data.name || 'User');
+      }
+    } catch (error) {
+      console.error('Error fetching user data from API:', error);
+    }
+  };
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -31,15 +72,18 @@ const HomeVocabScreen = () => {
         <Text style={styles.headerTitle}>Vocabulary</Text>
         <TouchableOpacity style={styles.profileButton}>
           <MaterialIcons name="person" size={24} color="white" />
-          <Text style={styles.profileText}>TienZe</Text>
+          <Text style={styles.profileText}>{username}</Text>
         </TouchableOpacity>
       </View>
       
       <View style={styles.searchContainer}>
-        <TouchableOpacity style={styles.searchBar}>
-          <MaterialIcons name="search" size={24} color={colors.primary} />
-          <Text style={styles.searchPlaceholder}>Tìm kiếm bộ từ vựng...</Text>
-        </TouchableOpacity>
+        <TextInput
+          style={styles.searchBar}
+          placeholder="Tìm kiếm bộ từ vựng..."
+          placeholderTextColor="#666"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
       </View>
 
       <ScrollView 
@@ -68,6 +112,12 @@ const HomeVocabScreen = () => {
     </View>
   );
 
+  // Filter vocabulary data based on selected level and search text
+  const filteredVocabData = VOCAB_DATA.filter(vocab =>
+    (selectedLevel === 'all' || vocab.level === selectedLevel) &&
+    vocab.word.toLowerCase().includes(searchText.toLowerCase())
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -94,11 +144,12 @@ const HomeVocabScreen = () => {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Bộ từ vựng gợi ý</Text>
+        <Text style={styles.sectionTitle}>Các bộ từ vựng</Text>
         
-        {[...Array(3)].map((_, i) => (
-          <VocabCard key={i} />
+        {filteredVocabData.map((vocab) => (
+          <VocabCard key={vocab.id} word={vocab.word} level={vocab.level} />
         ))}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -143,22 +194,12 @@ const styles = StyleSheet.create({
     paddingBottom: height * 0.02,
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'white',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchPlaceholder: {
-    marginLeft: 12,
-    color: '#666',
+    paddingVertical: 10,
     fontSize: width * 0.04,
+    color: '#333',
   },
   levelContainer: {
     paddingHorizontal: width * 0.05,

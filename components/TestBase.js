@@ -157,17 +157,25 @@ const TestBase = () => {
   };
 
   const renderCurrentPart = () => {
-    const parts = {
-      1: <TestPart1 ref={(ref) => (testPartRef.current[1] = ref)} />,
-      2: <TestPart2 ref={(ref) => (testPartRef.current[2] = ref)} />,
-      3: <TestPart3 ref={(ref) => (testPartRef.current[3] = ref)} />,
-      4: <TestPart4 ref={(ref) => (testPartRef.current[4] = ref)} />,
-      5: <TestPart5 ref={(ref) => (testPartRef.current[5] = ref)} />,
-      6: <TestPart6 ref={(ref) => (testPartRef.current[6] = ref)} />,
-      7: <TestPart7 ref={(ref) => (testPartRef.current[7] = ref)} />,
-    };
-    return parts[currentPart] || <TestPart1 />;
-  };
+    switch (currentPart) {
+      case 1:
+        return <TestPart1 ref={(ref) => (testPartRef.current[1] = ref)} />;
+      case 2:
+        return <TestPart2 ref={(ref) => (testPartRef.current[2] = ref)} />;
+      case 3:
+        return <TestPart3 ref={(ref) => (testPartRef.current[3] = ref)} />;
+      case 4:
+        return <TestPart4 ref={(ref) => (testPartRef.current[4] = ref)} />;
+      case 5:
+        return <TestPart5 ref={(ref) => (testPartRef.current[5] = ref)} />;
+      case 6:
+        return <TestPart6 ref={(ref) => (testPartRef.current[6] = ref)} />;
+      case 7:
+        return <TestPart7 ref={(ref) => (testPartRef.current[7] = ref)} />;
+      default:
+        return <TestPart1 />;
+    }
+  };  
 
   return (
     <SafeAreaView style={styles.container}>
