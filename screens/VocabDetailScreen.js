@@ -49,10 +49,10 @@ const TopicCard = ({ item, onPress }) => {
           style={styles.cardGradient}
         >
           <View style={styles.imageContainer}>
-            <Image source={item.image} style={styles.topicImage} />
+            <Image source={{ uri: item.thumbnail }} style={styles.topicImage} />
           </View>
           <View style={styles.cardContent}>
-            <Text style={styles.topicTitle}>{item.title}</Text>
+            <Text style={styles.topicTitle}>{item.name}</Text>
             <View style={styles.progressWrapper}>
               <View style={styles.progressBarBackground}>
                 <LinearGradient
@@ -125,16 +125,16 @@ const TopicModal = ({ visible, topic, onClose, onLearn }) => (
           {topic && (
             <>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{topic.title}</Text>
+                <Text style={styles.modalTitle}>{topic.name}</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                   <FontAwesome5 name="times" size={20} color="#666" />
                 </TouchableOpacity>
               </View>
-              <Image source={topic.image} style={styles.modalImage} />
+              <Image source={{ uri: topic.thumbnail }} style={styles.modalImage} />
               <Text style={styles.modalDescription}>
-                Học các từ vựng về chủ đề {topic.title.toLowerCase()} 
-                để nâng cao vốn từ của bạn.
+                Học các từ vựng về chủ đề {topic.name || 'Chưa có thông tin'} để nâng cao vốn từ của bạn.
               </Text>
+
               <TouchableOpacity
                 style={styles.learnButton}
                 onPress={onLearn}
@@ -156,13 +156,41 @@ const TopicModal = ({ visible, topic, onClose, onLearn }) => (
   </Modal>
 );
 
-const VocabDetailScreen = () => {
+const VocabDetailScreen = ({ route }) => {
   const navigation = useNavigation();
+  const { topicId } = route.params;
   const [message, setMessage] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
+  const [topics, setTopics] = useState([]); // Cập nhật topic từ API
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef(null);
+  const [review, setReview] = useState({
+    userName: 'Khanh',
+    rating: 4,
+    review: 'Rất hài lòng với ứng dụng, giao diện đẹp và dễ sử dụng',
+  });
+
+  const stats = [
+    { label: 'Bài đã học', value: 1, icon: 'book-open' },
+    { label: 'Bài chưa học', value: 7, icon: 'book' },
+    { label: 'Từ đã thuộc', value: 24, icon: 'check-circle' },
+    { label: 'Từ chưa thuộc', value: 16, icon: 'circle' },
+  ];
+  
+
+  useEffect(() => {
+    console.log(topicId);
+    if (topicId) {
+      fetch(`http://10.0.2.2:3000/api/v1/group-topic/${topicId}`)
+        .then(response => response.json())
+        .then(data => {
+          setSelectedTopic(data);
+          setTopics(data.__topics__ || []);
+        })
+        .catch(error => console.error('Error fetching topic data:', error));
+    }
+  }, [topicId]);  
 
   // Theo dõi sự kiện bàn phím
   useEffect(() => {
@@ -190,30 +218,8 @@ const VocabDetailScreen = () => {
     };
   }, []);
 
-  const topics = [
-    { id: 1, title: 'JOB', image: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/job.png' }},
-    { id: 2, title: 'LOVE', image: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/love.png' } },
-    { id: 3, title: 'FRIENDSHIP', image: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/love.png' } },
-    { id: 4, title: 'FAMILY', image: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/love.png' } },
-  ];
-
-  const stats = [
-    { label: 'Bài đã học', value: 1, icon: 'book-open' },
-    { label: 'Bài chưa học', value: 7, icon: 'book' },
-    { label: 'Từ đã thuộc', value: 24, icon: 'check-circle' },
-    { label: 'Từ chưa thuộc', value: 16, icon: 'circle' },
-  ];
-
-  const review = {
-    userName: 'Khanh',
-    rating: 4,
-    review: 'Rất hài lòng với ứng dụng, giao diện đẹp và dễ sử dụng',
-  };
-
   const handleSubmitComment = () => {
-    // Xử lý gửi comment
     if (message.trim()) {
-      // TODO: Implement comment submission
       setMessage('');
       Keyboard.dismiss();
     }
@@ -236,22 +242,21 @@ const VocabDetailScreen = () => {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Topics Section */}
             <FlatList
               data={topics}
               renderItem={({ item }) => (
-                <TopicCard 
+                <TopicCard
                   item={item}
                   onPress={() => {
-                    setSelectedTopic(item);
-                    setModalVisible(true);
+                    setSelectedTopic(item); // Set the selected topic
+                    setModalVisible(true); // Open the modal
                   }}
                 />
               )}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.topicList}
-              snapToInterval={CARD_WIDTH + 20}
+              snapToInterval={CARD_WIDTH + 20}  // Ensure this value is correct for your design
               decelerationRate="fast"
               keyExtractor={item => item.id.toString()}
               scrollEventThrottle={16}
