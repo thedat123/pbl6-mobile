@@ -36,25 +36,13 @@ const FilterButton = ({ title, isActive, onPress, icon }) => {
 
   return (
     <AnimatedTouchableOpacity
-      style={[
-        styles.filterButton,
-        isActive && styles.filterButtonActive,
-        { transform: [{ scale }] },
-      ]}
+      style={[styles.filterButton, isActive && styles.filterButtonActive, { transform: [{ scale }] }]}
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
     >
-      <FontAwesome 
-        name={icon} 
-        size={18} 
-        color={isActive ? '#fff' : '#666'} 
-        style={styles.filterIcon} 
-      />
-      <Text style={[
-        styles.filterButtonText, 
-        isActive && styles.filterButtonTextActive
-      ]}>
+      <FontAwesome name={icon} size={18} color={isActive ? '#fff' : '#666'} style={styles.filterIcon} />
+      <Text style={[styles.filterButtonText, isActive && styles.filterButtonTextActive]}>
         {title}
       </Text>
     </AnimatedTouchableOpacity>
@@ -79,17 +67,14 @@ const TestCard = ({ title, testsCount, progress = 0, onPress }) => {
   };
 
   return (
-    <AnimatedTouchableOpacity 
-      style={[styles.testCard, { transform: [{ scale }] }]}
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
+    <AnimatedTouchableOpacity style={[styles.testCard, { transform: [{ scale }] }]} onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <View style={styles.testInfo}>
         <View style={styles.testIconContainer}>
           <FontAwesome name="file-text-o" size={20} color="#007AFF" />
         </View>
-        <Text style={styles.testTitle} numberOfLines={2}>{title}</Text>
+        <Text style={styles.testTitle} numberOfLines={2}>
+          {title}
+        </Text>
       </View>
       <View style={styles.testStats}>
         <View style={styles.statsContainer}>
@@ -111,7 +96,7 @@ const TestCard = ({ title, testsCount, progress = 0, onPress }) => {
   );
 };
 
-const TestSection = ({ title, imageSource, onTestPress }) => (
+const TestSection = ({ title, imageSource, onTestPress, filter }) => (
   <View style={styles.sectionContainer}>
     <View style={styles.sectionHeader}>
       <Image source={imageSource} style={styles.sectionImage} />
@@ -125,15 +110,21 @@ const TestSection = ({ title, imageSource, onTestPress }) => (
       </TouchableOpacity>
     </View>
     <View style={styles.testGrid}>
-      {[1, 2, 3, 4, 5, 6].map((num) => (
-        <TestCard
-          key={num}
-          title={`2024 Practice Set TOEIC Test ${num}`}
-          testsCount={3}
-          progress={num * 10}
-          onPress={() => onTestPress(num)}
-        />
-      ))}
+      {[1, 2, 3, 4, 5, 6].map((num) => {
+        // Filter logic based on activeFilter
+        if (filter && !title.toLowerCase().includes(filter.toLowerCase())) {
+          return null;
+        }
+        return (
+          <TestCard
+            key={num}
+            title={`2024 Practice Set TOEIC Test ${num}`}
+            testsCount={3}
+            progress={num * 10}
+            onPress={() => onTestPress(num)}
+          />
+        );
+      })}
     </View>
   </View>
 );
@@ -146,6 +137,24 @@ const TestScreen = () => {
   const handleTestPress = useCallback(() => {
     navigation.navigate('TestSubject');
   }, []);
+
+  // Define test sections with categories (Listening, Reading, etc.)
+  const testSections = [
+    { title: '2024 Practice Set 1', category: 'Listening' },
+    { title: '2024 Practice Set 2', category: 'Reading' },
+    { title: '2024 Practice Set 3', category: 'Listening' },
+    { title: '2024 Practice Set 4', category: 'Reading' },
+    { title: '2024 Practice Set 5', category: 'Listening' },
+    { title: '2024 Practice Set 6', category: 'Reading' },
+  ];
+
+  // Combine the search text and active filter to filter sections
+  const filteredSections = testSections.filter((section) => {
+    return (
+      section.title.toLowerCase().includes(searchText.toLowerCase()) &&
+      (activeFilter === 'All Skills' || section.category === activeFilter)
+    );
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -161,7 +170,7 @@ const TestScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
-      
+
       <View style={styles.filterContainer}>
         <View style={styles.searchContainer}>
           <FontAwesome name="search" size={18} color="#666" style={styles.searchIcon} />
@@ -173,10 +182,7 @@ const TestScreen = () => {
             onChangeText={setSearchText}
           />
           {searchText.length > 0 && (
-            <TouchableOpacity 
-              style={styles.clearButton}
-              onPress={() => setSearchText('')}
-            >
+            <TouchableOpacity style={styles.clearButton} onPress={() => setSearchText('')}>
               <FontAwesome name="times-circle" size={16} color="#999" />
             </TouchableOpacity>
           )}
@@ -204,16 +210,13 @@ const TestScreen = () => {
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {[1, 2, 3].map((num) => (
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {filteredSections.map((section, index) => (
           <TestSection
-            key={num}
-            title={`2024 Practice Set ${num}`}
-            imageSource={{uri: 'http://192.168.100.101:8081/assets/images/Test/toeic_test_home.png'}}
+            key={index}
+            title={section.title}
+            imageSource={{ uri: 'http://192.168.100.101:8081/assets/images/Test/toeic_test_home.png' }}
+            filter={searchText}  // Pass the active search text as a filter to TestSection
             onTestPress={handleTestPress}
           />
         ))}
@@ -221,6 +224,7 @@ const TestScreen = () => {
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

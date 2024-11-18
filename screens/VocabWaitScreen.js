@@ -1,10 +1,13 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient'; // Import if you use Expo
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 const VocabWaitScreen = () => {
-  const navigation = useNavigation(); // Initialize navigation
+  const navigation = useNavigation();
+  const route = useRoute();  // Access route params
+  const { topicId } = route.params;  // Get the passed topicId
+
   return (
     <LinearGradient
       colors={['#f7f8fa', '#d6e4ff']} // Soft gradient background
@@ -19,13 +22,30 @@ const VocabWaitScreen = () => {
       <Text style={styles.message}>Bạn vừa hoàn thành phần từ vựng</Text>
       {/* Button Section */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.buttonContinue} activeOpacity={0.8} onPress={() => navigation.navigate('VocabLearnScreen')}>
+        <TouchableOpacity
+          style={styles.buttonContinue}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('VocabLearnScreen', { topicId: topicId })}
+        >
           <Text style={styles.buttonText}>HỌC LẠI</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.buttonCheck} activeOpacity={0.8} onPress={() => navigation.navigate('VocabTestScreen')}>
+        <TouchableOpacity
+          style={styles.buttonCheck}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('VocabTestScreen')}
+        >
           <Text style={styles.buttonText}>KIỂM TRA</Text>
         </TouchableOpacity>
       </View>
+
+      {/* New Home Button Section */}
+      <TouchableOpacity
+        style={styles.buttonHome}
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate('MainAppNavigator')}  // Adjust the screen name as needed
+      >
+        <Text style={styles.buttonText}>QUAY VỀ TRANG CHỦ</Text>
+      </TouchableOpacity>
     </LinearGradient>
   );
 };
@@ -81,6 +101,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 2,
     elevation: 5,
+  },
+  buttonHome: {
+    marginTop: 20,
+    backgroundColor: '#ff5722', // Orange color for 'QUAY VỀ TRANG CHỦ'
+    borderRadius: 10,
+    paddingVertical: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 5,
+    width: '100%',
   },
   buttonText: {
     color: '#ffffff',

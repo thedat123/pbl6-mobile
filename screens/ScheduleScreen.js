@@ -8,13 +8,11 @@ import {
   Alert,
   ScrollView,
   Platform,
-  Modal,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
 
-// Configure notifications
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -35,6 +33,11 @@ const ScheduleScreen = () => {
   useEffect(() => {
     requestNotificationPermission();
     calculateDaysUntilExam();
+    // Add listener for notification response
+    const responseListener = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+    return () => {
+      responseListener.remove();
+    };
   }, [examDate]);
 
   const requestNotificationPermission = async () => {
@@ -50,6 +53,12 @@ const ScheduleScreen = () => {
     } catch (error) {
       console.log('Error requesting notification permission:', error);
     }
+  };
+
+  const handleNotificationResponse = (response) => {
+    const { notification } = response;
+    const { title, body } = notification.request.content;
+    Alert.alert('Notification Tapped', `Title: ${title}\nMessage: ${body}`);
   };
 
   const calculateDaysUntilExam = () => {
@@ -321,11 +330,6 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
   switchThumbEnabled: {
     transform: [{ translateX: 22 }],
@@ -343,6 +347,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E8EAED',
+    marginTop: 8,
   },
   timeButtonText: {
     marginLeft: 8,
@@ -350,36 +355,37 @@ const styles = StyleSheet.create({
     color: '#4A4A4A',
   },
   input: {
-    height: 40,
-    borderColor: '#E8EAED',
-    borderWidth: 1,
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#F8F9FA',
     borderRadius: 8,
-    marginVertical: 12,
-    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#E8EAED',
     fontSize: 16,
+    color: '#4A4A4A',
   },
   saveButton: {
+    marginTop: 24,
     backgroundColor: '#4A90E2',
-    padding: 16,
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   saveButtonText: {
-    color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    color: 'white',
   },
   resetButton: {
-    marginTop: 12,
+    marginTop: 16,
     backgroundColor: '#E8EAED',
-    padding: 16,
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   resetButtonText: {
-    color: '#4A4A4A',
     fontSize: 16,
-    fontWeight: '600',
+    color: '#4A90E2',
   },
 });
 

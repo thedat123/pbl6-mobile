@@ -177,10 +177,8 @@ const VocabDetailScreen = ({ route }) => {
     { label: 'Từ đã thuộc', value: 24, icon: 'check-circle' },
     { label: 'Từ chưa thuộc', value: 16, icon: 'circle' },
   ];
-  
 
   useEffect(() => {
-    console.log(topicId);
     if (topicId) {
       fetch(`http://10.0.2.2:3000/api/v1/group-topic/${topicId}`)
         .then(response => response.json())
@@ -192,7 +190,6 @@ const VocabDetailScreen = ({ route }) => {
     }
   }, [topicId]);  
 
-  // Theo dõi sự kiện bàn phím
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
@@ -321,10 +318,11 @@ const VocabDetailScreen = ({ route }) => {
         topic={selectedTopic}
         onClose={() => setModalVisible(false)}
         onLearn={() => {
-          navigation.navigate("VocabLearnScreen", { selectedTopic });
+          navigation.navigate("VocabLearnScreen", { topicId: selectedTopic.id });
           setModalVisible(false);
         }}
       />
+
     </SafeAreaView>
   );
 };
