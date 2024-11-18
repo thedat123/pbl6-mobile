@@ -1,53 +1,43 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, Animated, PanResponder, TouchableWithoutFeedback } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ProgressBar from '../components/ProgressBar';
 import * as Speech from 'expo-speech';
-import { useNavigation } from '@react-navigation/native'; // Import useNavigation
+import { useNavigation } from '@react-navigation/native';
+import { Audio } from 'expo-av';
 
 const { width } = Dimensions.get('window');
 
-// Sample vocabulary data
-const vocabList = [
-  {
-    word: 'date',
-    pronunciation: '/deit/',
-    definition: '(n) an agreement to meet someone; a romantic appointment',
-    example: 'She has a date tonight.',
-    translation: 'Tối nay cô ấy sẽ đi hẹn hò.',
-    image: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/date.png' },
-  },
-  {
-    word: 'apple',
-    pronunciation: '/ˈæp.l̩/',
-    definition: '(n) a round fruit with red or green skin',
-    example: 'She ate an apple for lunch.',
-    translation: 'Cô ấy ăn một quả táo vào bữa trưa.',
-    image: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/date.png' },
-  },
-  {
-    word: 'car',
-    pronunciation: '/kɑːr/',
-    definition: '(n) a road vehicle with an engine, four wheels, and seats for a few people',
-    example: 'He drives a red car.',
-    translation: 'Anh ấy lái một chiếc xe màu đỏ.',
-    image: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/date.png' },
-  },
-];
+const VocabLearnScreen = ({ route }) => {
+  const { topicId } = route.params;
 
-const VocabLearnScreen = () => {
-  const navigation = useNavigation(); // Initialize navigation
-  const [progress, setProgress] = useState(1 / vocabList.length);
+  const navigation = useNavigation();
+  const [vocabList, setVocabList] = useState([]);
+  const [progress, setProgress] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentView, setCurrentView] = useState(0);
   const rotateAnim = useRef(new Animated.Value(0)).current;
+  const [sound, setSound] = useState();
 
   const rotateInterpolation = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '180deg'],
   });
+
+  useEffect(() => {
+    if (topicId) {
+      fetch(`http://10.0.2.2:3000/api/v1/topic/${topicId}`)
+        .then(response => response.json())
+        .then(data => {
+          const words = data.__listWord__ || [];
+          setVocabList(words);
+          setProgress(1 / words.length);
+        })
+        .catch(error => console.error('Error fetching vocabulary data:', error));
+    }
+  }, [topicId]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -57,9 +47,9 @@ const VocabLearnScreen = () => {
       onPanResponderRelease: (evt, gestureState) => {
         const swipeThreshold = 50;
         if (gestureState.dx < -swipeThreshold) {
-          handleNextWord(); // Swipe left to go to the next word
+          handleNextWord();
         } else if (gestureState.dx > swipeThreshold) {
-          handlePreviousWord(); // Swipe right to go back to the previous word
+          handlePreviousWord();
         }
       },
     })
@@ -84,11 +74,10 @@ const VocabLearnScreen = () => {
         return newIndex;
       });
     } else {
-      // Navigate to VocabWaitScreen when at the last word
-      navigation.navigate('VocabWaitScreen');
+      navigation.navigate('VocabWaitScreen', { topicId: topicId });
     }
   };
-  
+
   const handlePreviousWord = () => {
     if (currentIndex > 0) {
       setCurrentIndex((prevIndex) => {
@@ -99,18 +88,43 @@ const VocabLearnScreen = () => {
     }
   };
 
-  const handleSpeak = () => {
-    const { word } = vocabList[currentIndex];
-    Speech.speak(word, {
-      language: 'en-US',
-      pitch: 1.0,
-      rate: 0.5,
-      volume: 1.0,
-    });
+  const handleSpeak = async () => {
+    const { audio } = vocabList[currentIndex];
+    if (audio) {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audio },
+          { shouldPlay: true }
+        );
+        setSound(sound);
+      } catch (error) {
+        console.error('Error playing audio:', error);
+      }
+    }
+  };
+
+  const handleSpeakExample = async () => {
+    const { exampleAudio } = vocabList[currentIndex];
+    if (exampleAudio) {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: exampleAudio },
+          { shouldPlay: true }
+        );
+        setSound(sound);
+      } catch (error) {
+        console.error('Error playing example audio:', error);
+      }
+    }
   };
 
   const renderContent = () => {
-    const { word, pronunciation, definition, example, translation } = vocabList[currentIndex];
+    if (vocabList.length === 0) {
+      return <Text>Loading...</Text>;
+    }
+
+    const { word, pronunciation, definition, example, translate, thumbnail, wordClass } = vocabList[currentIndex];
+
     const commonTextStyles = {
       fontSize: 18,
       color: '#004d40',
@@ -120,7 +134,7 @@ const VocabLearnScreen = () => {
     if (currentView === 0) {
       return (
         <View style={styles.wordContainer}>
-          <Text style={styles.word}>{`${word} (n)`}</Text>
+          <Text style={styles.word}>{`${word} (${wordClass})`}</Text>
           <Text style={styles.pronunciation}>{pronunciation}</Text>
           <TouchableOpacity style={styles.iconButton} onPress={handleSpeak}>
             <Icon name="volume-up" size={28} color="#00796b" />
@@ -131,7 +145,7 @@ const VocabLearnScreen = () => {
       return (
         <View style={styles.wordContainer}>
           <Text style={styles.definitionTitle}>Definition</Text>
-          <Text style={styles.definition}>{definition}</Text>
+          <Text style={styles.definition}>{definition || 'No definition available'}</Text>
         </View>
       );
     } else if (currentView === 2) {
@@ -141,8 +155,12 @@ const VocabLearnScreen = () => {
           <Text style={styles.pronunciation}>{pronunciation}</Text>
           <Text style={commonTextStyles}>Example:</Text>
           <Text style={commonTextStyles}>{example}</Text>
+          <TouchableOpacity style={styles.iconButton} onPress={handleSpeakExample}>
+            <Icon name="volume-up" size={28} color="#00796b" />
+          </TouchableOpacity>
           <Text style={commonTextStyles}>Translation:</Text>
-          <Text style={commonTextStyles}>{translation}</Text>
+          <Text style={commonTextStyles}>{translate}</Text>
+          {thumbnail && <Image source={{ uri: thumbnail }} style={styles.thumbnail} />}
         </View>
       );
     }
@@ -151,20 +169,17 @@ const VocabLearnScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Progress Bar */}
         <View style={styles.progressContainer}>
           <Text style={styles.progressText}>{`${currentIndex + 1}/${vocabList.length}`}</Text>
           <ProgressBar progress={progress} />
         </View>
 
-        {/* Vocabulary Card with Animation and PanResponder */}
         <View {...panResponder.panHandlers}>
           <TouchableWithoutFeedback onPress={() => {}}>
             <Animated.View style={[styles.cardContainer, { transform: [{ rotateY: rotateInterpolation }] }]}>
               <LinearGradient colors={['#ffffff', '#e0f2f1']} style={styles.card}>
-                <Image source={vocabList[currentIndex].image} style={styles.image} />
+                <Image source={{ uri: vocabList[currentIndex]?.thumbnail }} style={styles.image} />
                 {renderContent()}
-                {/* Rotate Icon */}
                 <TouchableOpacity style={styles.rotateButton} onPress={handleRotate}>
                   <Icon name="refresh" size={28} color="#00796b" />
                   <Text style={styles.rotateText}>Rotate</Text>
@@ -174,21 +189,20 @@ const VocabLearnScreen = () => {
           </TouchableWithoutFeedback>
         </View>
 
-        {/* Navigation Arrows */}
         <View style={styles.navigation}>
           <TouchableOpacity
             style={styles.navButton}
             onPress={handlePreviousWord}
-            activeOpacity={1} // Always allow the previous button to be pressed
+            activeOpacity={1}
           >
             <Icon name="chevron-left" size={36} color={currentIndex === 0 ? '#ddd' : '#00796b'} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.navButton}
             onPress={handleNextWord}
-            activeOpacity={1} // Always allow the next button to be pressed
+            activeOpacity={1}
           >
-            <Icon name="chevron-right" size={36} color='#00796b' />
+            <Icon name="chevron-right" size={36} color="#00796b" />
           </TouchableOpacity>
         </View>
       </View>
@@ -206,7 +220,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    height: '100%',
+    height: '100%',  // Adjusted height to 100% to fit content properly
+    paddingBottom: 30, // Added padding at the bottom to avoid cut-off content
   },
   progressContainer: {
     flexDirection: 'row',
@@ -214,6 +229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     width: '100%',
+    marginTop: 30, // Added marginTop to add space at the top
   },
   progressText: {
     marginLeft: 20,
@@ -223,12 +239,11 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     width: 320,
-    height: 500,
+    height: 'auto',  // Allow card height to adjust dynamically
     marginBottom: 20,
   },
   card: {
     width: '100%',
-    height: '100%',
     padding: 20,
     borderRadius: 15,
     shadowColor: '#000',
@@ -237,6 +252,8 @@ const styles = StyleSheet.create({
     elevation: 10,
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    minHeight: 300, // Ensures a minimum height for the card
   },
   image: {
     width: 200,
@@ -249,6 +266,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
+    flexWrap: 'wrap',  // Allow word to wrap if too long
   },
   wordContainer: {
     alignItems: 'center',
@@ -256,11 +274,13 @@ const styles = StyleSheet.create({
     marginVertical: 10,
     paddingHorizontal: 10,
     flexShrink: 1,
+    flexGrow: 1, // Allow content to grow if space is available
   },
   pronunciation: {
     fontSize: 16,
     color: '#757575',
     marginTop: 5,
+    textAlign: 'center',  // Ensure pronunciation is centered
   },
   definitionTitle: {
     fontSize: 22,
@@ -272,6 +292,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#004d40',
     textAlign: 'center',
+    marginVertical: 10, // Add vertical margin to prevent content overlap
   },
   commonText: {
     fontSize: 18,
@@ -281,6 +302,7 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     marginTop: 10,
+    marginBottom: 20,
     padding: 10,
     borderRadius: 50,
     backgroundColor: '#e0f7fa',
@@ -292,7 +314,8 @@ const styles = StyleSheet.create({
   rotateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 30,
+    marginTop: 15,
+    justifyContent: 'center', // Center rotate button
   },
   rotateText: {
     marginLeft: 5,
@@ -305,10 +328,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: 40,
+    marginTop: 20, // Added margin to give space at the bottom of the card
   },
   navButton: {
-    padding: 10,
+    padding: 5,
   },
 });
+
 
 export default VocabLearnScreen;

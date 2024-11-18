@@ -229,7 +229,7 @@ const HomeVocabScreen = () => {
 
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <StatusBar barStyle="light-content" />
         {renderWelcomeHeader()}
   
         <View style={styles.mainContainer}>

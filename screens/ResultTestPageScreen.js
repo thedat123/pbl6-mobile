@@ -160,7 +160,7 @@ const ResultTestPageScreen = () => {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.secondaryButton}
-              onPress={() => navigation.navigate("TestSubject")}
+              onPress={() => navigation.navigate("MainAppNavigator")}
             >
               <MaterialCommunityIcons name="arrow-left" size={20} color="#2196F3" />
               <Text style={styles.secondaryButtonText}>Back</Text>
