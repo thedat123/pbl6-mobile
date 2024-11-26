@@ -12,6 +12,7 @@ import {
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -21,24 +22,96 @@ Notifications.setNotificationHandler({
   }),
 });
 
+const saveNotificationSettings = async (settings) => {
+  try {
+    await AsyncStorage.setItem('notificationSettings', JSON.stringify(settings));
+  } catch (error) {
+    console.error('Failed to save notification settings:', error);
+  }
+};
+
+const loadNotificationSettings = async () => {
+  try {
+    const settings = await AsyncStorage.getItem('notificationSettings');
+    return settings ? JSON.parse(settings) : null;
+  } catch (error) {
+    console.error('Failed to load notification settings:', error);
+    return null;
+  }
+};
+
 const ScheduleScreen = () => {
+  // Basic states
   const [examDate, setExamDate] = useState(new Date());
   const [daysUntilExam, setDaysUntilExam] = useState(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [notificationTime, setNotificationTime] = useState(new Date());
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("Don't forget to study!");
+  const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
+  const [reminderMode, setReminderMode] = useState('daily'); // 'daily', 'weekly', 'specific'
+  const [dailyTime, setDailyTime] = useState(new Date());
+  const [weeklyDay, setWeeklyDay] = useState(0); // 0 = Sunday, 6 = Saturday
+  const [weeklyTime, setWeeklyTime] = useState(new Date());
+  const [specificDate, setSpecificDate] = useState(new Date());
+  const [specificTime, setSpecificTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [currentTimePickerMode, setCurrentTimePickerMode] = useState(''); // 'daily', 'weekly', 'specific'
 
   useEffect(() => {
     requestNotificationPermission();
     calculateDaysUntilExam();
-    // Add listener for notification response
     const responseListener = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
     return () => {
       responseListener.remove();
     };
   }, [examDate]);
+
+  useEffect(() => {
+    const initializeSettings = async () => {
+      const savedSettings = await loadNotificationSettings();
+      if (savedSettings) {
+        setIsNotificationEnabled(savedSettings.isNotificationEnabled);
+        setReminderMode(savedSettings.reminderMode);
+        setDailyTime(new Date(savedSettings.dailyTime));
+        setWeeklyDay(savedSettings.weeklyDay);
+        setWeeklyTime(new Date(savedSettings.weeklyTime));
+        setSpecificDate(new Date(savedSettings.specificDate));
+        setSpecificTime(new Date(savedSettings.specificTime));
+        setNotificationMessage(savedSettings.notificationMessage);
+      }
+    };
+  
+    initializeSettings();
+  }, []);
+  
+  useEffect(() => {
+    const currentSettings = {
+      isNotificationEnabled,
+      reminderMode,
+      dailyTime,
+      weeklyDay,
+      weeklyTime,
+      specificDate,
+      specificTime,
+      notificationMessage,
+    };
+    saveNotificationSettings(currentSettings);
+  }, [
+    isNotificationEnabled,
+    reminderMode,
+    dailyTime,
+    weeklyDay,
+    weeklyTime,
+    specificDate,
+    specificTime,
+    notificationMessage,
+  ]);  
+
+  const calculateDaysUntilExam = () => {
+    const today = new Date();
+    const timeDiff = examDate - today;
+    const days = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+    setDaysUntilExam(days);
+  };
 
   const requestNotificationPermission = async () => {
     try {
@@ -61,49 +134,95 @@ const ScheduleScreen = () => {
     Alert.alert('Notification Tapped', `Title: ${title}\nMessage: ${body}`);
   };
 
-  const calculateDaysUntilExam = () => {
-    const today = new Date();
-    const timeDiff = examDate - today;
-    const days = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
-    setDaysUntilExam(days);
-  };
-
-  const scheduleDailyNotification = async () => {
+  const scheduleNotifications = async () => {
     try {
+      // Cancel all existing notifications to avoid duplicates
       await Notifications.cancelAllScheduledNotificationsAsync();
-
-      if (isNotificationEnabled) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "🎯 TOEIC Study Reminder",
-            body: `${daysUntilExam} days until your exam! ${notificationMessage}`,
-            sound: true,
-          },
-          trigger: {
-            hour: notificationTime.getHours(),
-            minute: notificationTime.getMinutes(),
-            repeats: true,
-          },
-        });
-        Alert.alert('Success', 'Daily reminder has been scheduled!');
-      } else {
-        Alert.alert('Reminder Disabled', 'You have disabled the daily reminder.');
+  
+      if (!isNotificationEnabled) {
+        Alert.alert('Reminder Disabled', 'You have disabled the reminders.');
+        return;
       }
+  
+      let trigger;
+  
+      switch (reminderMode) {
+        case 'daily': {
+          const now = new Date();
+          const dailyTriggerTime = new Date();
+          dailyTriggerTime.setHours(dailyTime.getHours());
+          dailyTriggerTime.setMinutes(dailyTime.getMinutes());
+          dailyTriggerTime.setSeconds(0);
+  
+          // Nếu thời gian hôm nay đã qua, đặt thông báo cho ngày mai
+          if (dailyTriggerTime <= now) {
+            dailyTriggerTime.setDate(dailyTriggerTime.getDate() + 1);
+          }
+  
+          trigger = dailyTriggerTime; // Sử dụng thời gian chính xác cho trigger
+          break;
+        }
+  
+        case 'weekly': {
+          const now = new Date();
+          const weeklyTriggerTime = new Date();
+          weeklyTriggerTime.setHours(weeklyTime.getHours());
+          weeklyTriggerTime.setMinutes(weeklyTime.getMinutes());
+          weeklyTriggerTime.setSeconds(0);
+  
+          // Tính số ngày đến lần kích hoạt tiếp theo trong tuần
+          const daysUntilNextTrigger =
+            (7 - now.getDay() + weeklyDay) % 7 || 7; // ||7 đảm bảo không đặt lại trong cùng ngày
+          weeklyTriggerTime.setDate(now.getDate() + daysUntilNextTrigger);
+  
+          trigger = weeklyTriggerTime; // Sử dụng thời gian chính xác cho trigger
+          break;
+        }
+  
+        case 'specific': {
+          const now = new Date();
+          const specificTriggerTime = new Date(specificDate);
+          specificTriggerTime.setHours(specificTime.getHours());
+          specificTriggerTime.setMinutes(specificTime.getMinutes());
+          specificTriggerTime.setSeconds(0);
+  
+          // Nếu thời gian cụ thể đã qua, báo lỗi
+          if (specificTriggerTime <= now) {
+            Alert.alert(
+              'Invalid Time',
+              'The specific reminder must be set for a future date and time.'
+            );
+            return;
+          }
+  
+          trigger = specificTriggerTime;
+          break;
+        }
+  
+        default:
+          Alert.alert('Error', 'Invalid reminder mode selected.');
+          return;
+      }
+  
+      // Schedule the notification
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "🎯 TOEIC Study Reminder",
+          body: `${daysUntilExam} days until your exam! ${notificationMessage}`,
+          sound: true,
+        },
+        trigger, // Đặt trigger chính xác
+      });
+  
+      Alert.alert(
+        'Success',
+        `${reminderMode.charAt(0).toUpperCase() + reminderMode.slice(1)} reminder has been scheduled!`
+      );
     } catch (error) {
-      Alert.alert('Error', 'Failed to schedule notification');
+      Alert.alert('Error', 'Failed to schedule notifications');
+      console.error(error);
     }
-  };
-
-  const confirmSettings = () => {
-    Alert.alert(
-      'Confirm Settings',
-      `Exam Date: ${formatDate(examDate)}\nNotification Time: ${formatTime(notificationTime)}\nMessage: ${notificationMessage}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: scheduleDailyNotification },
-      ]
-    );
-  };
+  };  
 
   const onDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
@@ -115,7 +234,17 @@ const ScheduleScreen = () => {
   const onTimeChange = (event, selectedTime) => {
     setShowTimePicker(false);
     if (selectedTime) {
-      setNotificationTime(selectedTime);
+      switch (currentTimePickerMode) {
+        case 'daily':
+          setDailyTime(selectedTime);
+          break;
+        case 'weekly':
+          setWeeklyTime(selectedTime);
+          break;
+        case 'specific':
+          setSpecificTime(selectedTime);
+          break;
+      }
     }
   };
 
@@ -134,112 +263,193 @@ const ScheduleScreen = () => {
     });
   };
 
-  const resetSettings = () => {
-    setExamDate(new Date());
-    setNotificationTime(new Date());
-    setIsNotificationEnabled(false);
-    setNotificationMessage("Don't forget to study!");
+  const showTimePickerForMode = (mode) => {
+    setCurrentTimePickerMode(mode);
+    setShowTimePicker(true);
   };
 
   return (
     <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <MaterialIcons name="school" size={40} color="#4A90E2" />
+        <Text style={styles.headerTitle}>TOEIC Study Planner</Text>
+      </View>
+
+      {/* Exam Date and Countdown Section */}
       <View style={styles.card}>
-        <Text style={styles.title}>TOEIC Exam Scheduler</Text>
-
-        {/* Exam Date Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Exam Date</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <MaterialIcons name="event" size={24} color="#4A90E2" />
-            <Text style={styles.dateButtonText}>{formatDate(examDate)}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Countdown Section */}
         {daysUntilExam !== null && (
           <View style={styles.countdownContainer}>
+            <Text style={styles.countdownLabel}>Time Until Exam</Text>
             <Text style={styles.countdownNumber}>{daysUntilExam}</Text>
-            <Text style={styles.countdownLabel}>Days until exam</Text>
+            <Text style={styles.countdownUnit}>days</Text>
+            <View style={styles.progressBar}>
+              <View style={[styles.progress, { width: `${Math.min(100, (30 - daysUntilExam) / 30 * 100)}%` }]} />
+            </View>
           </View>
         )}
 
-        {/* Notification Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily Reminder</Text>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="event" size={24} color="#4A90E2" />
+            <Text style={styles.sectionTitle}>Exam Date</Text>
+          </View>
           <TouchableOpacity
-            style={styles.switch}
-            onPress={() => {
-              setIsNotificationEnabled(!isNotificationEnabled);
-              if (!isNotificationEnabled) {
-                setShowTimePicker(true);
-              }
-            }}
+            style={styles.inputButton}
+            onPress={() => setShowDatePicker(true)}
           >
-            <View style={[styles.switchTrack, isNotificationEnabled && styles.switchTrackEnabled]}>
-              <View style={[styles.switchThumb, isNotificationEnabled && styles.switchThumbEnabled]} />
-            </View>
-            <Text style={styles.switchLabel}>
-              {isNotificationEnabled ? 'Enabled' : 'Disabled'}
-            </Text>
+            <Text style={styles.dateButtonText}>{formatDate(examDate)}</Text>
+            <MaterialIcons name="edit" size={20} color="#4A90E2" />
           </TouchableOpacity>
-
-          {isNotificationEnabled && (
-            <TouchableOpacity
-              style={styles.timeButton}
-              onPress={() => setShowTimePicker(true)}
-            >
-              <MaterialIcons name="access-time" size={24} color="#4A90E2" />
-              <Text style={styles.timeButtonText}>{formatTime(notificationTime)}</Text>
-            </TouchableOpacity>
-          )}
-
-          {isNotificationEnabled && (
-            <TextInput
-              style={styles.input}
-              placeholder="Custom Reminder Message"
-              value={notificationMessage}
-              onChangeText={setNotificationMessage}
-            />
-          )}
         </View>
 
-        {/* Save Button */}
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={confirmSettings}
-        >
-          <Text style={styles.saveButtonText}>Save Settings</Text>
-        </TouchableOpacity>
+        {/* Reminder Settings Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="notifications" size={24} color="#4A90E2" />
+            <Text style={styles.sectionTitle}>Reminder Settings</Text>
+          </View>
 
-        {/* Reset Button */}
-        <TouchableOpacity
-          style={styles.resetButton}
-          onPress={resetSettings}
-        >
-          <Text style={styles.resetButtonText}>Reset Settings</Text>
-        </TouchableOpacity>
+          <View style={styles.switchContainer}>
+            <Text style={styles.switchLabel}>Enable Reminders</Text>
+            <TouchableOpacity
+              style={styles.switch}
+              onPress={() => setIsNotificationEnabled(!isNotificationEnabled)}
+            >
+              <View style={[styles.switchTrack, isNotificationEnabled && styles.switchTrackEnabled]}>
+                <View style={[styles.switchThumb, isNotificationEnabled && styles.switchThumbEnabled]} />
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {isNotificationEnabled && (
+            <>
+              <View style={styles.reminderTypeContainer}>
+                {['daily', 'weekly', 'specific'].map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[
+                      styles.reminderTypeButton,
+                      reminderMode === mode && styles.reminderTypeButtonSelected
+                    ]}
+                    onPress={() => setReminderMode(mode)}
+                  >
+                    <Text style={[
+                      styles.reminderTypeText,
+                      reminderMode === mode && styles.reminderTypeTextSelected
+                    ]}>
+                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Daily Reminder Settings */}
+              {reminderMode === 'daily' && (
+                <View style={styles.reminderSettings}>
+                  <Text style={styles.settingsLabel}>Daily Reminder Time</Text>
+                  <TouchableOpacity
+                    style={styles.timeButton}
+                    onPress={() => showTimePickerForMode('daily')}
+                  >
+                    <Text style={styles.timeButtonText}>{formatTime(dailyTime)}</Text>
+                    <MaterialIcons name="access-time" size={20} color="#4A90E2" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Weekly Reminder Settings */}
+              {reminderMode === 'weekly' && (
+                <View style={styles.reminderSettings}>
+                  <Text style={styles.settingsLabel}>Weekly Reminder Day & Time</Text>
+                  <View style={styles.weekdayContainer}>
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.weekdayButton,
+                          weeklyDay === index && styles.weekdayButtonSelected,
+                        ]}
+                        onPress={() => setWeeklyDay(index)}
+                      >
+                        <Text style={[
+                          styles.weekdayText,
+                          weeklyDay === index && styles.weekdayTextSelected,
+                        ]}>
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.timeButton}
+                    onPress={() => showTimePickerForMode('weekly')}
+                  >
+                    <Text style={styles.timeButtonText}>{formatTime(weeklyTime)}</Text>
+                    <MaterialIcons name="access-time" size={20} color="#4A90E2" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Specific Date Reminder Settings */}
+              {reminderMode === 'specific' && (
+                <View style={styles.reminderSettings}>
+                  <Text style={styles.settingsLabel}>Specific Date & Time</Text>
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>{formatDate(specificDate)}</Text>
+                    <MaterialIcons name="event" size={20} color="#4A90E2" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.timeButton}
+                    onPress={() => showTimePickerForMode('specific')}
+                  >
+                    <Text style={styles.timeButtonText}>{formatTime(specificTime)}</Text>
+                    <MaterialIcons name="access-time" size={20} color="#4A90E2" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <TextInput
+                style={styles.messageInput}
+                value={notificationMessage}
+                onChangeText={setNotificationMessage}
+                placeholder="Enter reminder message"
+                multiline
+              />
+
+              <TouchableOpacity
+                style={styles.scheduleButton}
+                onPress={scheduleNotifications}
+              >
+                <Text style={styles.scheduleButtonText}>Schedule Reminder</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       </View>
 
-      {/* Date Picker */}
+      {/* Date/Time Pickers */}
       {showDatePicker && (
         <DateTimePicker
           value={examDate}
           mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          display="default"
           onChange={onDateChange}
           minimumDate={new Date()}
         />
       )}
 
-      {/* Time Picker */}
       {showTimePicker && (
         <DateTimePicker
-          value={notificationTime}
+          value={
+            currentTimePickerMode === 'daily' ? dailyTime :
+            currentTimePickerMode === 'weekly' ? weeklyTime :
+            specificTime
+          }
           mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          display="default"
           onChange={onTimeChange}
         />
       )}
@@ -250,76 +460,108 @@ const ScheduleScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F5F6FA',
+  },
+  header: {
+    padding: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginLeft: 10,
+    color: '#4A90E2',
   },
   card: {
-    margin: 16,
-    padding: 20,
     backgroundColor: 'white',
     borderRadius: 15,
+    margin: 10,
+    padding: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 24,
-    textAlign: 'center',
+    shadowRadius: 4,
+    elevation: 3,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4A4A4A',
-    marginBottom: 12,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E8EAED',
-  },
-  dateButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#4A4A4A',
+    marginLeft: 10,
   },
   countdownContainer: {
     alignItems: 'center',
-    marginVertical: 24,
-    padding: 16,
-    backgroundColor: '#4A90E2',
-    borderRadius: 12,
-  },
-  countdownNumber: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: 'white',
+    marginBottom: 20,
   },
   countdownLabel: {
     fontSize: 16,
-    color: 'white',
-    opacity: 0.9,
+    color: '#666',
   },
-  switch: {
+  countdownNumber: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#4A90E2',
+  },
+  countdownUnit: {
+    fontSize: 16,
+    color: '#666',
+  },
+  progressBar: {
+    width: '100%',
+    height: 6,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 3,
+    marginTop: 10,
+  },
+  progress: {
+    height: '100%',
+    backgroundColor: '#4A90E2',
+    borderRadius: 3,
+  },
+  inputButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    backgroundColor: '#F5F6FA',
+    padding: 15,
+    borderRadius: 10,
+    marginVertical: 5,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  timeButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  switchLabel: {
+    fontSize: 16,
+    color: '#333',
+  },
+  switch: {
+    padding: 5,
   },
   switchTrack: {
     width: 50,
     height: 28,
+    backgroundColor: '#E0E0E0',
     borderRadius: 14,
-    backgroundColor: '#E8EAED',
     padding: 2,
   },
   switchTrackEnabled: {
@@ -328,64 +570,131 @@ const styles = StyleSheet.create({
   switchThumb: {
     width: 24,
     height: 24,
-    borderRadius: 12,
     backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   switchThumbEnabled: {
     transform: [{ translateX: 22 }],
   },
-  switchLabel: {
-    marginLeft: 12,
+  reminderTypeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  reminderTypeButton: {
+    flex: 1,
+    padding: 10,
+    alignItems: 'center',
+    backgroundColor: '#F5F6FA',
+    borderRadius: 8,
+    marginHorizontal: 5,
+  },
+  reminderTypeButtonSelected: {
+    backgroundColor: '#4A90E2',
+  },
+  reminderTypeText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  reminderTypeTextSelected: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  reminderSettings: {
+    backgroundColor: '#F5F6FA',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  settingsLabel: {
     fontSize: 16,
-    color: '#4A4A4A',
+    fontWeight: '600',
+    marginBottom: 10,
+    color: '#333',
+  },
+  weekdayContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  weekdayButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFF',
+    minWidth: 40,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  weekdayButtonSelected: {
+    backgroundColor: '#4A90E2',
+  },
+  weekdayText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  weekdayTextSelected: {
+    color: 'white',
+    fontWeight: '600',
   },
   timeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E8EAED',
-    marginTop: 8,
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  timeButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#4A4A4A',
-  },
-  input: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E8EAED',
-    fontSize: 16,
-    color: '#4A4A4A',
-  },
-  saveButton: {
-    marginTop: 24,
-    backgroundColor: '#4A90E2',
-    padding: 12,
-    borderRadius: 8,
+  dateButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  saveButtonText: {
+  messageInput: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginVertical: 15,
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  scheduleButton: {
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  scheduleButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: '600',
-    color: 'white',
-  },
-  resetButton: {
-    marginTop: 16,
-    backgroundColor: '#E8EAED',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    fontSize: 16,
-    color: '#4A90E2',
   },
 });
 

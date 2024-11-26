@@ -1,4 +1,4 @@
-import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useRef, useImperativeHandle, forwardRef, useEffect } from 'react';
 import { View, Image, StyleSheet, SafeAreaView, ScrollView, Dimensions, Text } from 'react-native';
 import AudioPlayer from '../components/AudioPlayer';
 import { QuestionNumber, QuestionOptions } from '../components/QuestionTest';
@@ -17,84 +17,115 @@ const questionData = [
       {
         id: 1,
         audio: { uri: audioFiles[0] },
-        image: { uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png' },
+        image: require('../assets/images/Test/test_sentence.png'),
         options: [
-          { label: 'A', text: 'Statement A' },
-          { label: 'B', text: 'Statement B' },
-          { label: 'C', text: 'Statement C' },
-          { label: 'D', text: 'Statement D' },
+          { label: 'A', text: 'Statement A', isCorrect: true },
+          { label: 'B', text: 'Statement B', isCorrect: false },
+          { label: 'C', text: 'Statement C', isCorrect: false },
+          { label: 'D', text: 'Statement D', isCorrect: false },
         ],
+        correctAnswer: 'A'
       },
       {
         id: 2,
         audio: { uri: audioFiles[0] },
-        image: { uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png' },
+        image: require('../assets/images/Test/test_sentence.png'),
         options: [
-          { label: 'A', text: 'Statement A' },
-          { label: 'B', text: 'Statement B' },
-          { label: 'C', text: 'Statement C' },
-          { label: 'D', text: 'Statement D' },
+          { label: 'A', text: 'Statement A', isCorrect: true },
+          { label: 'B', text: 'Statement B', isCorrect: false },
+          { label: 'C', text: 'Statement C', isCorrect: false },
+          { label: 'D', text: 'Statement D', isCorrect: false },
         ],
+        correctAnswer: 'A'
       },
       {
         id: 3,
         audio: { uri: audioFiles[0] },
-        image: { uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png' },
+        image: require('../assets/images/Test/test_sentence.png'),
         options: [
-          { label: 'A', text: 'Statement A' },
-          { label: 'B', text: 'Statement B' },
-          { label: 'C', text: 'Statement C' },
-          { label: 'D', text: 'Statement D' },
+          { label: 'A', text: 'Statement A', isCorrect: true },
+          { label: 'B', text: 'Statement B', isCorrect: false },
+          { label: 'C', text: 'Statement C', isCorrect: false },
+          { label: 'D', text: 'Statement D', isCorrect: false },
         ],
+        correctAnswer: 'A'
       },
       {
         id: 4,
         audio: { uri: audioFiles[1] },
-        image: { uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png' },
+        image: require('../assets/images/Test/test_sentence.png'),
         options: [
-          { label: 'A', text: 'Statement A' },
-          { label: 'B', text: 'Statement B' },
-          { label: 'C', text: 'Statement C' },
-          { label: 'D', text: 'Statement D' },
+          { label: 'A', text: 'Statement A', isCorrect: true },
+          { label: 'B', text: 'Statement B', isCorrect: false },
+          { label: 'C', text: 'Statement C', isCorrect: false },
+          { label: 'D', text: 'Statement D', isCorrect: false },
         ],
+        correctAnswer: 'A'
       },
       {
         id: 5,
         audio: { uri: audioFiles[1] },
-        image: { uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png' },
+        image: require('../assets/images/Test/test_sentence.png'),
         options: [
-          { label: 'A', text: 'Statement A' },
-          { label: 'B', text: 'Statement B' },
-          { label: 'C', text: 'Statement C' },
-          { label: 'D', text: 'Statement D' },
+          { label: 'A', text: 'Statement A', isCorrect: true },
+          { label: 'B', text: 'Statement B', isCorrect: false },
+          { label: 'C', text: 'Statement C', isCorrect: false },
+          { label: 'D', text: 'Statement D', isCorrect: false },
         ],
+        correctAnswer: 'A'
       },
       {
         id: 6,
         audio: { uri: audioFiles[1] },
-        image: { uri: 'http://192.168.100.101:8081/assets/images/Test/test_sentence.png' },
+        image: require('../assets/images/Test/test_sentence.png'),
         options: [
-          { label: 'A', text: 'Statement A' },
-          { label: 'B', text: 'Statement B' },
-          { label: 'C', text: 'Statement C' },
-          { label: 'D', text: 'Statement D' },
+          { label: 'A', text: 'Statement A', isCorrect: true },
+          { label: 'B', text: 'Statement B', isCorrect: false },
+          { label: 'C', text: 'Statement C', isCorrect: false },
+          { label: 'D', text: 'Statement D', isCorrect: false },
         ],
+        correctAnswer: 'A'
       },
     ],
   },
 ];
 
-const TestPart4 = forwardRef((props, ref) => {
+const TestPart4 = forwardRef(({ onQuestionStatusChange }, ref) => {
   const [answers, setAnswers] = useState({});
   const [questionStatus, setQuestionStatus] = useState({});
+  const [startTime, setStartTime] = useState(null);
+
+  useEffect(() => {
+    setStartTime(Date.now());
+  }, []);
 
   const handleAnswerSelect = (questionId, option) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: option }));
-    setQuestionStatus((prev) => ({ ...prev, [questionId]: 'answered' }));
+    setAnswers((prev) => ({ 
+      ...prev, 
+      [questionId]: option 
+    }));
+    
+    const newStatus = { 
+      [questionId]: option ? 'answered' : 'viewed' 
+    };
+    
+    setQuestionStatus((prev) => ({ 
+      ...prev, 
+      ...newStatus 
+    }));
+    
+    if (onQuestionStatusChange) {
+      onQuestionStatusChange(newStatus);
+    }
   };
 
   useImperativeHandle(ref, () => ({
     getQuestionData: () => questionData,
+    getQuestionStatus: () => questionStatus,
+    getAnswers: () => answers,
+    getTestDuration: () => {
+      return Math.floor((Date.now() - startTime) / 1000);
+    }
   }));
 
   return (

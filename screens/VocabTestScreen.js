@@ -5,25 +5,29 @@ import TimeCounter from '../components/TimeCounter';
 import QuestionVocab from '../components/QuestionVocab';
 import MultipleChoiceVocab from '../components/MultipleChoiceVocab';
 import WritingVocab from '../components/WritingVocab';
+import axios from "axios";
 import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-const VocabTestScreen = () => {
-  const navigation = useNavigation();
-  const totalQuestions = 20;
+const VocabTestScreen = ({ route }) => {
+  const { topicId } = route.params;
+  const [results, setResults] = useState([]);
+  const [topicName, setTopicName] = useState("");
   const [progress, setProgress] = useState(0);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigation = useNavigation();
+
   const isAnswerSubmitted = useRef(false);
-  
-  // Animation refs
   const progressAnimation = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const shakeAnimation = useRef(new Animated.Value(0)).current;
+  const [totalQuestions, setTotalQuestions] = useState(0);
 
-  // Animation for smooth question transitions
   const animateTransition = () => {
     Animated.sequence([
       Animated.timing(fadeAnim, {
@@ -39,7 +43,6 @@ const VocabTestScreen = () => {
     ]).start();
   };
 
-  // Progress bar animation
   useEffect(() => {
     Animated.timing(progressAnimation, {
       toValue: progress,
@@ -47,146 +50,50 @@ const VocabTestScreen = () => {
       useNativeDriver: false,
     }).start();
   }, [progress]);
-  
-  const questions = [
-    // 14 câu trắc nghiệm
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Wedding (n)',
-      options: ['Lễ cưới, đám cưới', '(việc) thêu, thêu thùa', 'Cảnh, phân cảnh', 'Đáp án khác'],
-      correctAnswer: 'Lễ cưới, đám cưới',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Art (n)',
-      options: ['Nghệ thuật', 'Điều khiển', 'Tàu biển', 'Động vật'],
-      correctAnswer: 'Nghệ thuật',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Dog (n)',
-      options: ['Con mèo', 'Con chó', 'Con ngựa', 'Con chim'],
-      correctAnswer: 'Con chó',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Sky (n)',
-      options: ['Bầu trời', 'Ngôi nhà', 'Con sông', 'Ngọn núi'],
-      correctAnswer: 'Bầu trời',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Mountain (n)',
-      options: ['Ngọn núi', 'Bãi biển', 'Thị trấn', 'Thành phố'],
-      correctAnswer: 'Ngọn núi',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Car (n)',
-      options: ['Xe hơi', 'Xe đạp', 'Xe máy', 'Xe tải'],
-      correctAnswer: 'Xe hơi',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'River (n)',
-      options: ['Dòng sông', 'Bãi cát', 'Thác nước', 'Hồ nước'],
-      correctAnswer: 'Dòng sông',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Tree (n)',
-      options: ['Cây cối', 'Cánh đồng', 'Thảm cỏ', 'Bông hoa'],
-      correctAnswer: 'Cây cối',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'House (n)',
-      options: ['Ngôi nhà', 'Cây cầu', 'Đại dương', 'Đồng ruộng'],
-      correctAnswer: 'Ngôi nhà',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Cat (n)',
-      options: ['Con mèo', 'Con chó', 'Con thỏ', 'Con hươu'],
-      correctAnswer: 'Con mèo',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Book (n)',
-      options: ['Cuốn sách', 'Cái ghế', 'Cái bàn', 'Chiếc xe'],
-      correctAnswer: 'Cuốn sách',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Sun (n)',
-      options: ['Mặt trời', 'Mặt trăng', 'Ngôi sao', 'Đám mây'],
-      correctAnswer: 'Mặt trời',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Bicycle (n)',
-      options: ['Xe đạp', 'Xe máy', 'Xe tải', 'Xe buýt'],
-      correctAnswer: 'Xe đạp',
-      type: 'multiple-choice',
-    },
-    {
-      text: 'Chọn nghĩa đúng với từ vựng sau',
-      word: 'Phone (n)',
-      options: ['Điện thoại', 'Máy tính', 'Tivi', 'Loa'],
-      correctAnswer: 'Điện thoại',
-      type: 'multiple-choice',
-    },
 
-    // 6 câu tự luận
-    {
-      text: 'Viết nghĩa đúng của từ sau',
-      word: 'Apple (n)',
-      correctAnswer: 'Apple',
-      type: 'writing',
-    },
-    {
-      text: 'Viết nghĩa đúng của từ sau',
-      word: 'Computer (n)',
-      correctAnswer: 'Computer',
-      type: 'writing',
-    },
-    {
-      text: 'Viết nghĩa đúng của từ sau',
-      word: 'School (n)',
-      correctAnswer: 'School',
-      type: 'writing',
-    },
-    {
-      text: 'Viết nghĩa đúng của từ sau',
-      word: 'Teacher (n)',
-      correctAnswer: 'Teacher',
-      type: 'writing',
-    },
-    {
-      text: 'Viết nghĩa đúng của từ sau',
-      word: 'Student (n)',
-      correctAnswer: 'Student',
-      type: 'writing',
-    },
-    {
-      text: 'Viết nghĩa đúng của từ sau',
-      word: 'Library (n)',
-      correctAnswer: 'Library',
-      type: 'writing',
-    },
-  ];
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        const response = await axios.get(`http://10.0.2.2:3000/api/v1/topic/${topicId}`);
+        const data = response.data.__listWord__;
+
+        // Generate questions
+        const generatedQuestions = data.map((wordData, index) => {
+          const allWords = data.map((item) => item.translate);
+          const incorrectAnswers = allWords
+            .filter((option) => option !== wordData.translate) // Loại bỏ đáp án đúng
+            .sort(() => Math.random() - 0.5) // Xáo trộn ngẫu nhiên
+            .slice(0, 3); // Lấy tối đa 3 đáp án sai
+
+          // Kiểm tra để đảm bảo luôn có đủ 4 đáp án
+          while (incorrectAnswers.length < 3) {
+            incorrectAnswers.push("Đáp án khác");
+          }
+
+          // Trộn đáp án đúng vào danh sách và xáo trộn lại
+          const options = [wordData.translate, ...incorrectAnswers].sort(() => Math.random() - 0.5);
+
+          return {
+            text: "Chọn nghĩa đúng với từ vựng sau",
+            word: `${wordData.word} (${wordData.wordClass})`,
+            options,
+            correctAnswer: wordData.translate,
+            type: "multiple-choice",
+          };
+        });
+
+        setQuestions(generatedQuestions);
+        setTotalQuestions(generatedQuestions.length);
+        setTopicName(response.data.name);
+        setLoading(false);
+      } catch (error) {
+        console.error("Failed to fetch data:", error);
+        Alert.alert("Error", "Unable to load test questions. Please try again later.");
+      }
+    };
+
+    fetchQuestions();
+  }, [topicId]);
 
   const currentQuestion = questions[currentQuestionIndex];
 
@@ -197,8 +104,13 @@ const VocabTestScreen = () => {
     setProgress((prev) => Math.min(prev + 1 / totalQuestions, 1));
     setShowCorrectAnswer(true);
 
-    // Chỉ thực hiện animation rung khi trả lời sai
+    setResults((prevResults) => [
+      ...prevResults,
+      { questionIndex: currentQuestionIndex, isCorrect },
+    ]);    
+
     if (!isCorrect) {
+      // Shake animation for incorrect answer
       Animated.sequence([
         Animated.timing(shakeAnimation, {
           toValue: 10,
@@ -231,7 +143,12 @@ const VocabTestScreen = () => {
       if (prevIndex < questions.length - 1) {
         return prevIndex + 1;
       } else {
-        navigation.navigate('VocabResultScreen');
+        navigation.navigate("VocabResultScreen", {
+          topicId: topicId,
+          results: results,
+          totalQuestions: totalQuestions,
+          topicName: topicName,
+        });
         return prevIndex;
       }
     });
@@ -248,115 +165,132 @@ const VocabTestScreen = () => {
     }
   }, [showCorrectAnswer]);
 
+  useEffect(() => {
+    setResults([]); // Clear previous results
+    setCurrentQuestionIndex(0); // Reset question index
+    setProgress(0); // Reset progress
+    setShowCorrectAnswer(false); // Reset correct answer visibility
+    setSelectedAnswer(null); // Reset selected answer
+    isAnswerSubmitted.current = false; // Reset submission flag
+  }, [topicId]);
+
   const handleClose = () => {
-    Alert.alert(
-      "Xác nhận thoát",
-      "Bạn có chắc muốn kết thúc bài kiểm tra?",
-      [
-        { text: "Hủy", style: "cancel" },
-        { text: "Đồng ý", onPress: () => navigation.goBack() }
-      ]
-    );
+    Alert.alert("Xác nhận thoát", "Bạn có chắc muốn kết thúc bài kiểm tra?", [
+      { text: "Hủy", style: "cancel" },
+      { text: "Đồng ý", onPress: () => navigation.goBack() },
+    ]);
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Text>Loading...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView
-  style={{ flex: 1 }}
-  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-  keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
->
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* Header Section */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <AntDesign name="close" size={20} color="#FFF" />
-          </TouchableOpacity>
-          <View style={styles.progressWrapper}>
-            <Text style={styles.questionCounter}>
-              Câu hỏi {currentQuestionIndex + 1}/{totalQuestions}
-            </Text>
-            <View style={styles.progressBarContainer}>
-              <Animated.View 
-                style={[
-                  styles.progressBar, 
-                  { width: progressAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%']
-                  })}
-                ]} 
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <AntDesign name="close" size={20} color="#FFF" />
+            </TouchableOpacity>
+            <View style={styles.progressWrapper}>
+              <Text style={styles.questionCounter}>
+                Câu hỏi {currentQuestionIndex + 1}/{totalQuestions}
+              </Text>
+              <View style={styles.progressBarContainer}>
+                <Animated.View
+                  style={[
+                    styles.progressBar,
+                    {
+                      width: progressAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ["0%", "100%"],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+            <View style={styles.timerContainer}>
+              <TimeCounter
+                key={currentQuestionIndex}
+                initialTime={20}
+                onTimeOut={handleTimeOut}
+                style={styles.timer}
               />
             </View>
           </View>
-          <View style={styles.timerContainer}>
-            <TimeCounter
-              key={currentQuestionIndex}
-              initialTime={20}
-              onTimeOut={handleTimeOut}
-              style={styles.timer}
-            />
-          </View>
-        </View>
 
-        {/* Question Section */}
-        <Animated.View 
-          style={[
-            styles.questionSection,
-            {
-              opacity: fadeAnim,
-              transform: [
-                { translateX: shakeAnimation },
-                { translateX: fadeAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [50, 0]
-                })}
-              ]
-            }
-          ]}
-        >
-          <QuestionVocab questionData={currentQuestion} style={styles.question} />
-        </Animated.View>
+          {/* Question Section */}
+          <Animated.View
+            style={[
+              styles.questionSection,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  { translateX: shakeAnimation },
+                  {
+                    translateX: fadeAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [50, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <QuestionVocab questionData={currentQuestion} style={styles.question} />
+          </Animated.View>
 
-        {/* Answer Section */}
-        <Animated.View 
-          style={[
-            styles.answerSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: fadeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [20, 0]
-              })}]
-            }
-          ]}
-        >
-          {currentQuestion.type === 'multiple-choice' ? (
-            <MultipleChoiceVocab
+          {/* Answer Section */}
+          <Animated.View
+            style={[
+              styles.answerSection,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  {
+                    translateY: fadeAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {currentQuestion.type === "multiple-choice" ? (
+              <MultipleChoiceVocab
               key={currentQuestionIndex}
               questionData={currentQuestion}
               onAnswer={handleAnswer}
               showCorrectAnswer={showCorrectAnswer}
               selectedAnswer={selectedAnswer}
               setSelectedAnswer={setSelectedAnswer}
+              correctAnswer={currentQuestion.correctAnswer} 
               style={styles.multipleChoice}
-            />
-          ) : (
-            <WritingVocab
-              key={currentQuestionIndex}
-              correctAnswer={currentQuestion.correctAnswer}
-              onAnswer={handleAnswer}
-              showCorrectAnswer={showCorrectAnswer}
-              setSelectedAnswer={setSelectedAnswer}
-              style={styles.writingSection}
-            />
-          )}
-        </Animated.View>
-      </View>
-    </SafeAreaView>
-  </KeyboardAvoidingView>
-
+            />            
+            ) : (
+              <WritingVocab
+                key={currentQuestionIndex}
+                correctAnswer={currentQuestion.correctAnswer}
+                onAnswer={handleAnswer}
+                showCorrectAnswer={showCorrectAnswer}
+                setSelectedAnswer={setSelectedAnswer}
+                style={styles.writingSection}
+              />
+            )}
+          </Animated.View>
+        </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safeArea: {

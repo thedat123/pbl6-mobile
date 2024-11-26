@@ -62,7 +62,9 @@ const TopicCard = ({ item, onPress }) => {
                   style={[styles.progressBar, { width: '35%' }]}
                 />
               </View>
-              <Text style={styles.progressText}>7/20 từ vựng</Text>
+              <Text style={styles.progressText}>
+                {item.__listWord__?.length || 0} từ vựng
+              </Text>
             </View>
           </View>
         </LinearGradient>

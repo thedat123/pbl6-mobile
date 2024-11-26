@@ -2,45 +2,107 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, ScrollView, Animated } from 'react-native';
 import { ProgressCircle } from 'react-native-svg-charts';
 import { LineChart } from 'react-native-chart-kit';
-import { useMemo, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useMemo, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-const VocabResultScreen = () => {
-  const navigation = useNavigation(); // Initialize navigation
-  const [progress, setProgress] = useState(0); // Create a state to store the progress value
+const VocabResultScreen = ({ route }) => {
+  const { results, totalQuestions, topicId, topicName } = route.params;
+  const navigation = useNavigation();
+  const [progress, setProgress] = useState(0);
   const progressAnimation = useMemo(() => new Animated.Value(0), []);
+  const correctAnswers = results.filter((result) => result.isCorrect).length;
+  const incorrectAnswers = totalQuestions - correctAnswers;
 
-  React.useEffect(() => {
-    // Add listener to the animated value to update the state with the number
+  const [history, setHistory] = useState([]); // Stores quiz history
+
+  useEffect(() => {
+    const targetProgress = correctAnswers / totalQuestions;
     progressAnimation.addListener(({ value }) => {
       setProgress(value);
     });
 
-    // Start animation
     Animated.timing(progressAnimation, {
-      toValue: 0.35, // Target value
+      toValue: targetProgress,
       duration: 1500,
       useNativeDriver: false,
     }).start();
 
-    // Cleanup the listener on unmount
+    saveResultToHistory(correctAnswers); // Save results after calculation
+
     return () => progressAnimation.removeAllListeners();
   }, [progressAnimation]);
+
+  // Save current results to AsyncStorage
+  const saveResultToHistory = async (score) => {
+    try {
+      const storedHistory = await AsyncStorage.getItem(`quizHistory_${topicId}`);
+      const parsedHistory = storedHistory ? JSON.parse(storedHistory) : [];
+      const updatedHistory = [...parsedHistory, score];
+      await AsyncStorage.setItem(`quizHistory_${topicId}`, JSON.stringify(updatedHistory));
+      setHistory(updatedHistory);
+    } catch (error) {
+      console.error('Error saving quiz history:', error);
+    }
+  };
+
+  // Load quiz history from AsyncStorage
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const storedHistory = await AsyncStorage.getItem(`quizHistory_${topicId}`);
+        if (storedHistory) {
+          setHistory(JSON.parse(storedHistory));
+        }
+      } catch (error) {
+        console.error('Error loading quiz history:', error);
+      }
+    };
+
+    loadHistory();
+  }, [topicId]);
+
+  const handleNavigateHome = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'MainAppNavigator' }],
+      })
+    );
+  };
+
+  const handleNavigateTest = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'VocabTestScreen', params: { topicId: topicId } }],
+      })
+    );
+  };
+
+  const handleNavigateLearn = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'VocabLearnScreen', params: { topicId: topicId } }],
+      })
+    );
+  };
 
   const renderProgressStats = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statItem}>
         <Text style={styles.statLabel}>Từ đã thuộc</Text>
-        <Text style={styles.statValue}>7/20</Text>
+        <Text style={styles.statValue}>{correctAnswers}</Text>
         <Text style={styles.statSubtext}>từ vựng</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Text style={styles.statLabel}>Thời gian</Text>
-        <Text style={styles.statValue}>67</Text>
-        <Text style={styles.statSubtext}>giây</Text>
+        <Text style={styles.statLabel}>Từ chưa thuộc</Text>
+        <Text style={styles.statValue}>{incorrectAnswers}</Text>
+        <Text style={styles.statSubtext}>từ vựng</Text>
       </View>
     </View>
   );
@@ -53,44 +115,33 @@ const VocabResultScreen = () => {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Kết quả kiểm tra</Text>
-          <Text style={styles.subtitle}>Chủ đề: Từ vựng cơ bản</Text>
+          <Text style={styles.subtitle}>Chủ đề: {topicName}</Text>
         </View>
 
         <View style={styles.resultCard}>
           <View style={styles.progressContainer}>
             <ProgressCircle
               style={styles.progressCircle}
-              progress={progress} // Pass the progress value from state
+              progress={progress}
               progressColor={'#4CAF50'}
               backgroundColor={'#E8F5E9'}
               strokeWidth={15}
             />
             <View style={styles.progressTextContainer}>
-              <Text style={styles.progressPercentage}>{Math.round(progress * 100)}%</Text>
+              <Text style={styles.progressPercentage}>{Math.round((correctAnswers / totalQuestions) * 100)}%</Text>
               <Text style={styles.progressLabel}>Hoàn thành</Text>
             </View>
           </View>
-          
           {renderProgressStats()}
-        </View>
-
-        <View style={styles.messageCard}>
-          <View style={styles.messageIcon}>
-            <Text style={styles.emoji}>💪</Text>
-          </View>
-          <Text style={styles.messageTitle}>Cố gắng hơn nữa!</Text>
-          <Text style={styles.messageText}>
-            Bạn có thể làm tốt hơn đấy! Hãy ôn tập lại và thử sức lần nữa nhé.
-          </Text>
         </View>
 
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Tiến độ học tập</Text>
           <LineChart
             data={{
-              labels: ['Lần 1', 'Lần 2', 'Hiện tại'],
+              labels: history.map((_, index) => `Lần ${index + 1}`),
               datasets: [{
-                data: [15, 25, 35],
+                data: history.length > 0 ? history : [0], // Show default if no history
               }],
             }}
             width={width - 60}
@@ -117,11 +168,14 @@ const VocabResultScreen = () => {
         </View>
 
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={[styles.button, styles.reviewButton]} onPress={() => navigation.navigate('VocabLearnScreen')}>
+          <TouchableOpacity style={[styles.button, styles.reviewButton]} onPress={handleNavigateLearn}>
             <Text style={styles.reviewButtonText}>Học lại</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.retryButton]} onPress={() => navigation.navigate('VocabTestScreen')}>
+          <TouchableOpacity style={[styles.button, styles.retryButton]} onPress={handleNavigateTest}>
             <Text style={styles.retryButtonText}>Kiểm tra lại</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, styles.backButton]} onPress={handleNavigateHome}>
+            <Text style={styles.retryButtonText}>Trở về</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -282,11 +336,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 16,
     borderRadius: 30,
+    marginHorizontal: 5,
     alignItems: 'center',
   },
   reviewButton: {
     backgroundColor: '#1A237E',
-    marginRight: 10,
   },
   reviewButtonText: {
     color: '#fff',
@@ -295,6 +349,9 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     backgroundColor: '#4CAF50',
+  },
+  backButton: {
+    backgroundColor: '#FFC107',
   },
   retryButtonText: {
     color: '#fff',

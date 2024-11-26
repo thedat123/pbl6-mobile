@@ -22,6 +22,7 @@ import MainNavigator from '../navigation/MainNavigator';
 import ResultTestPageScreen from '../screens/ResultTestPageScreen';
 import ResultStatisticScreen from '../screens/ResultStatisticScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
+import TestScreen from '../screens/TestScreen';
 
 
 const Stack = createStackNavigator(); // Create Stack Navigator
@@ -93,6 +94,10 @@ const MainAppRoute = () => {
             <Ionicons name="arrow-back" size={28} color="#000" />
           ),
         }} 
+      />
+      <Stack.Screen 
+        name="TestScreen"
+        component={TestScreen}
       />
       <Stack.Screen 
         name="TestPart1"

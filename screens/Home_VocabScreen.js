@@ -32,7 +32,6 @@ const LEVELS = [
 ];
 
 const ITEMS_PER_PAGE = 4;
-
 const HomeVocabScreen = () => {
   const [selectedLevel, setSelectedLevel] = useState('all');
   const [searchText, setSearchText] = useState('');
@@ -69,12 +68,14 @@ const HomeVocabScreen = () => {
   }, []);
   
   const fetchInitialData = async () => {
+    setLoading(true); 
+    setError(null); 
     try {
       await Promise.all([fetchDataFromToken(), fetchVocabGroups()]);
-    } catch (error) {
+    } catch (err) {
       setError('Failed to load data. Please try again.');
     } finally {
-      setLoading(false);
+      setLoading(false); 
     }
   };
   

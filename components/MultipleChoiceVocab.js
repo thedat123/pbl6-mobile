@@ -1,47 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 
-const MultipleChoiceVocab = ({ questionData, onAnswer, showCorrectAnswer, selectedAnswer, setSelectedAnswer }) => {
+const MultipleChoiceVocab = ({ 
+  questionData, 
+  onAnswer, 
+  showCorrectAnswer, 
+  selectedAnswer, 
+  setSelectedAnswer 
+}) => {
   const [isCorrect, setIsCorrect] = useState(null);
 
-  // Reset the answer state when the question changes
+  // Defensive checks with early return
+  if (!questionData) {
+    console.error('MultipleChoiceVocab: No question data');
+    return <View><Text>No question available</Text></View>;
+  }
+
+  if (!questionData.options || !Array.isArray(questionData.options)) {
+    console.error('MultipleChoiceVocab: Invalid options', questionData);
+    return <View><Text>Invalid question options</Text></View>;
+  }
+
   useEffect(() => {
-    setIsCorrect(null); // Reset correctness state for the new question
+    setIsCorrect(null);
+    setSelectedAnswer(null);
   }, [questionData]);
 
-  useEffect(() => {
-    if (showCorrectAnswer && !selectedAnswer) {
-      // Automatically reveal the correct answer if time runs out and no answer is selected
-      setSelectedAnswer(questionData.correctAnswer);
-      setIsCorrect(false); // Đánh dấu là không đúng
-    }
-  }, [showCorrectAnswer]);
-
   const handleAnswer = (answer) => {
-    if (!selectedAnswer) {  // Ensure that the user can't select more than once
-      setSelectedAnswer(answer);
+    if (!selectedAnswer) {
       const isAnswerCorrect = answer === questionData.correctAnswer;
+      setSelectedAnswer(answer);
       setIsCorrect(isAnswerCorrect);
       onAnswer(isAnswerCorrect);
     }
   };
 
   const getOptionStyle = (option) => {
-    // Khi thời gian đã hết và không có câu trả lời nào được chọn
     if (showCorrectAnswer) {
       if (!selectedAnswer) {
-        return styles.wrongOption; // Đáp án đúng hiển thị màu đỏ khi hết giờ
+        return styles.wrongOption;
       }
       if (option === questionData.correctAnswer) {
-        return styles.correctOption; // Đáp án đúng hiển thị màu xanh
+        return styles.correctOption;
       }
     }
-    // Kiểm tra nếu người dùng đã chọn đáp án
+
     if (selectedAnswer === option) {
-      return isCorrect ? styles.selectedCorrectOption : styles.wrongOption; // Đáp án người dùng chọn
+      return isCorrect ? styles.selectedCorrectOption : styles.wrongOption;
     }
 
-    return {}; // Không có style
+    return {};
   };
 
   return (
@@ -51,7 +59,7 @@ const MultipleChoiceVocab = ({ questionData, onAnswer, showCorrectAnswer, select
           key={index}
           style={[styles.option, getOptionStyle(option)]}
           onPress={() => handleAnswer(option)}
-          disabled={!!selectedAnswer || showCorrectAnswer}  // Disable buttons if answer is selected or showing correct answer
+          disabled={!!selectedAnswer || showCorrectAnswer}
         >
           <Text style={styles.optionText}>{option}</Text>
         </TouchableOpacity>

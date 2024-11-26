@@ -1,41 +1,83 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, SafeAreaView, TouchableOpacity, Dimensions, useWindowDimensions } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Image, SafeAreaView, TouchableOpacity, Dimensions, useWindowDimensions, Animated, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Feather } from '@expo/vector-icons';
+import Pagination from '../components/Pagination';
+import { useNavigation } from '@react-navigation/native';
 
+const practiceResults = [
+    { id: '1', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 },
+    { id: '2', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 },
+    { id: '3', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 }
+];
+
+const LEVELS = [
+    { id: 'all', label: 'All', color: '#9E9E9E', icon: 'layers', gradient: ['#9E9E9E', '#757575'] },
+    { id: 'beginner', label: 'Beginner', color: '#4CAF50', icon: 'smile', gradient: ['#4CAF50', '#388E3C'] },
+    { id: 'intermediate', label: 'Intermediate', color: '#FF9800', icon: 'trending-up', gradient: ['#FF9800', '#F57C00'] },
+    { id: 'advanced', label: 'Advanced', color: '#F44336', icon: 'star', gradient: ['#F44336', '#D32F2F'] },
+  ];  
+
+  const recentTests = [
+    { id: '1', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
+    { id: '2', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
+    { id: '3', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
+];
+
+const ITEMS_PER_PAGE = 4;
 const HomePageScreen = () => {
-    // Use useWindowDimensions hook for responsive layout
     const { width, height } = useWindowDimensions();
     const [username, setUsername] = useState('');
+    const [vocabGroups, setVocabGroups] = useState([]);  // State for vocab groups
+    const [isLoading, setLoading] = useState(false);
+    const [showAllVocabGroups, setShowAllVocabGroups] = useState(false);
+    const [error, setError] = useState(null);
     const isLandscape = width > height;
+    const [currentPage, setCurrentPage] = useState(1);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
     // Responsive card widths
     const resultCardWidth = width * (isLandscape ? 0.4 : 0.75);
     const gridColumnWidth = (width - 60) / (isLandscape ? 3 : 2);
 
+    const visibleVocabGroups = showAllVocabGroups ? vocabGroups : vocabGroups.slice(0, 4);
+    const navigation = useNavigation();
+
     useEffect(() => {
-        fetchUsernameFromToken();
+        const animate = () => {
+            Animated.parallel([
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    friction: 8,
+                    tension: 40,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        };
+
+        animate();
+        fetchInitialData();
     }, []);
 
-    const practiceResults = [
-        { id: '1', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 },
-        { id: '2', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 },
-        { id: '3', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 }
-    ];
+    const fetchInitialData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            await Promise.all([fetchUsernameFromToken(), fetchVocabGroups()]);
+        } catch (err) {
+            setError('Failed to load data. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const vocabSets = [
-        { id: '1', title: '400 Words of TOEFL - Intermediate English', time: '21m', users: '23K', imageUrl: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/image.png' } },
-        { id: '2', title: '400 Words of TOEFL - Intermediate English', time: '21m', users: '23K', imageUrl: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/date.png' } },
-        { id: '3', title: '400 Words of TOEFL - Intermediate English', time: '21m', users: '23K', imageUrl: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/date.png' } },
-        { id: '4', title: '400 Words of TOEFL - Intermediate English', time: '21m', users: '23K', imageUrl: { uri: 'http://192.168.100.101:8081/assets/images/Vocab/date.png' } },
-    ];    
-
-    const recentTests = [
-        { id: '1', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
-        { id: '2', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
-        { id: '3', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
-    ];
-    
     const fetchUsernameFromToken = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
@@ -43,22 +85,43 @@ const HomePageScreen = () => {
                 const response = await fetch('http://10.0.2.2:3000/api/v1/auth/me', {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${token}`,  
-                        'Content-Type': 'application/json',   
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
                     },
                 });
-    
+
                 if (!response.ok) {
                     throw new Error('Failed to fetch username');
                 }
-    
+
                 const data = await response.json();
                 setUsername(data.name || 'User');
             }
         } catch (error) {
             console.error('Error fetching username from API:', error);
         }
-    };          
+    };
+
+    const fetchVocabGroups = async () => {
+        try {
+            const response = await fetch('http://10.0.2.2:3000/api/v1/group-topic/');
+            if (!response.ok) throw new Error('Failed to fetch vocab groups');
+            const data = await response.json();
+
+            // Ensure all groups have `__topics__` and `topicsCount`
+            const processedData = data.map(group => ({
+                ...group,
+                __topics__: group.__topics__ || [],
+                topicsCount: group.__topics__ ? group.__topics__.length : 0,
+            }));
+
+            setVocabGroups(processedData); // Set the vocab groups state
+            await AsyncStorage.setItem('vocabGroups', JSON.stringify(processedData));
+            await AsyncStorage.setItem('lastUpdated', Date.now().toString());
+        } catch (error) {
+            setError('Unable to load vocabulary groups');
+        }
+    };
 
     const renderPracticeResult = ({ item }) => (
         <TouchableOpacity style={[styles.resultCard, { width: resultCardWidth }]}>
@@ -75,25 +138,62 @@ const HomePageScreen = () => {
         </TouchableOpacity>
     );
 
-    const renderVocabSet = ({ item }) => (
-        <TouchableOpacity style={[styles.vocabCard, { width: gridColumnWidth }]}>
-            <Image 
-                source={item.imageUrl} 
-                style={[styles.vocabImage, { height: gridColumnWidth * 0.6 }]} 
-            />
-            <Text 
-                numberOfLines={2} 
-                style={[styles.vocabTitle, { fontSize: width * 0.035 }]}
+    const renderVocabSet = ({ item }) => {
+        const levelConfig = LEVELS.find((l) => l.id === item.level) || LEVELS[0];
+        
+        return (
+            <Animated.View 
+                key={item.id} 
+                style={[
+                    styles.vocabCard, 
+                    { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+                ]}
             >
-                {item.title}
-            </Text>
-            <View style={styles.vocabStats}>
-                <Text style={[styles.vocabText, { fontSize: width * 0.03 }]}>{item.time}</Text>
-                <View style={styles.dot} />
-                <Text style={[styles.vocabText, { fontSize: width * 0.03 }]}>{item.users} learners</Text>
-            </View>
-        </TouchableOpacity>
-    );
+                <TouchableOpacity 
+                    style={styles.vocabCardInner}
+                    onPress={() => navigation.navigate('VocabDetailScreen', { topicId: item.id })}
+                >
+                    <View style={styles.vocabImageContainer}>
+                        <Image 
+                            source={{ uri: item.thumbnail }} 
+                            style={styles.thumbnail}
+                            defaultSource={require('../assets/placeholder.png')}
+                        />
+                        <LinearGradient
+                            colors={levelConfig.gradient}
+                            style={styles.levelBadge}
+                        >
+                            <Feather name={levelConfig.icon} size={12} color="white" />
+                            <Text style={styles.levelBadgeText}>{levelConfig.label}</Text>
+                        </LinearGradient>
+                    </View>
+                    
+                    <View style={styles.vocabContent}>
+                        <Text style={styles.vocabTitle} numberOfLines={2}>{item.name}</Text>
+                        
+                        <View style={styles.vocabStats}>
+                            <View style={styles.topicCount}>
+                                <Feather name="book" size={14} color="#666" />
+                                <Text style={styles.topicCountText}>{item.topicsCount} topics</Text>
+                            </View>
+                            
+                            <View style={styles.progressSection}>
+                                <View style={styles.progressContainer}>
+                                    <View style={styles.progressBackground}>
+                                        <LinearGradient
+                                            colors={levelConfig.gradient}
+                                            style={[styles.progressFill, { width: `${item.progress || 0}%` }]}
+                                        />
+                                    </View>
+                                    <Text style={styles.progressText}>{`${item.progress || 0}%`}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            </Animated.View>
+        );
+    };
 
     const renderRecentTest = ({ item }) => (
         <TouchableOpacity style={[styles.testCard, { width: gridColumnWidth }]}>
@@ -115,7 +215,7 @@ const HomePageScreen = () => {
 
     return (
         <FlatList
-            data={[]}
+            data={visibleVocabGroups} 
             ListHeaderComponent={() => (
                 <>
                     <LinearGradient
@@ -140,7 +240,6 @@ const HomePageScreen = () => {
                             </View>
                         </SafeAreaView>
                     </LinearGradient>
-
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <Text style={[styles.sectionTitle, { fontSize: width * 0.05 }]}>Latest Practice Results</Text>
@@ -160,20 +259,61 @@ const HomePageScreen = () => {
 
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Text style={[styles.sectionTitle, { fontSize: width * 0.05 }]}>Top Vocabulary Sets</Text>
-                            <TouchableOpacity>
-                                <Text style={[styles.seeAll, { fontSize: width * 0.035 }]}>See All</Text>
+                            <Text style={[styles.sectionTitle, { fontSize: width * 0.05 }]}>
+                                Top Vocabulary Sets
+                            </Text>
+                            <TouchableOpacity onPress={() => setShowAllVocabGroups(!showAllVocabGroups)}>
+                                <Text style={[styles.seeAll, { fontSize: width * 0.035 }]}>
+                                    {showAllVocabGroups ? "Show Less" : "See All"}
+                                </Text>
                             </TouchableOpacity>
                         </View>
-                        <FlatList
-                            data={vocabSets}
-                            renderItem={renderVocabSet}
-                            keyExtractor={item => item.id}
-                            numColumns={isLandscape ? 3 : 2}
-                            key={isLandscape ? 'landscape' : 'portrait'}
-                            contentContainerStyle={styles.gridListContent}
-                        />
+
+                        {isLoading ? (
+                            <ActivityIndicator size="large" color="#0000ff" />
+                        ) : error ? (
+                            <Text style={styles.errorText}>{error}</Text>
+                        ) : (
+                            <>
+                                {showAllVocabGroups ? (
+                                    <>
+                                        {vocabGroups.length > 0 ? (
+                                            <View style={styles.vocabList}>
+                                                {vocabGroups
+                                                    .slice(
+                                                        (currentPage - 1) * ITEMS_PER_PAGE,
+                                                        currentPage * ITEMS_PER_PAGE
+                                                    )
+                                                    .map((item) => renderVocabSet({ item }))}
+                                            </View>
+                                        ) : (
+                                            <Text style={styles.noResultsText}>No vocabulary sets found.</Text>
+                                        )}
+
+                                        {/* Pagination */}
+                                        <View style={styles.paginationContainer}>
+                                            <Pagination
+                                                currentPage={currentPage}
+                                                totalItems={vocabGroups.length}
+                                                itemsPerPage={ITEMS_PER_PAGE}
+                                                onPageChange={setCurrentPage}
+                                            />
+                                        </View>
+                                    </>
+                                ) : (
+                                    <FlatList
+                                        data={vocabGroups.slice(0, 4)}
+                                        renderItem={renderVocabSet}
+                                        keyExtractor={(item) => item.id}
+                                        contentContainerStyle={styles.vocabList}
+                                        showsVerticalScrollIndicator={false}
+                                    />
+                                )}
+                            </>
+                        )}
                     </View>
+
+
 
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
@@ -282,33 +422,92 @@ const styles = StyleSheet.create({
         opacity: 1,
     },
     vocabCard: {
-        backgroundColor: '#ffffff',
+        flex: 1,
         margin: 8,
+        backgroundColor: '#ffffff',
         borderRadius: 16,
-        padding: 12,
-        elevation: 3,
+        elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        overflow: 'hidden',
     },
-    vocabImage: {
+    vocabCardInner: {
+        flex: 1,
+    },
+    vocabImageContainer: {
+        position: 'relative',
+        aspectRatio: 16/9,
+        backgroundColor: '#f0f2f5',
+    },
+    thumbnail: {
         width: '100%',
-        borderRadius: 12,
-        marginBottom: 12,
+        height: '100%',
+        resizeMode: 'cover',
     },
-    vocabTitle: {
-        fontWeight: '600',
-        color: '#1a237e',
-        marginBottom: 8,
-        lineHeight: 20,
-    },
-    vocabStats: {
+    levelBadge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
         flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
     },
-    vocabText: {
-        color: '#5c6bc0',
+    levelBadgeText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: '600',
+        marginLeft: 4,
+    },
+    vocabContent: {
+        padding: 12,
+    },
+    vocabTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1a237e',
+        marginBottom: 8,
+        lineHeight: 22,
+    },
+    vocabStats: {
+        gap: 8,
+    },
+    topicCount: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    topicCountText: {
+        color: '#666',
+        fontSize: 14,
+    },
+    progressSection: {
+        marginTop: 4,
+    },
+    progressContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    progressBackground: {
+        flex: 1,
+        height: 4,
+        backgroundColor: '#f0f2f5',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 2,
+    },
+    progressText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#666',
+        minWidth: 35,
     },
     dot: {
         width: 4,

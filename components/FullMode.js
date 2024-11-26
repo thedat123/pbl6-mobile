@@ -6,12 +6,10 @@ const FullMode = () => {
   const navigation = useNavigation();
 
   const handleStart = () => {
-    // Array of all part numbers
     const allParts = [1, 2, 3, 4, 5, 6, 7];
-    // Navigate to TestBase, passing all parts selected
     navigation.navigate('TestBase', {
       selectedParts: allParts,
-      timeLimit: 120 // Set a time limit if needed
+      timeLimit: 120 
     });
   };
 

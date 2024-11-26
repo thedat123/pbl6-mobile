@@ -10,28 +10,35 @@ import {
   SafeAreaView,
   Modal,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { Platform } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import Input from '../components/Input';
 
-// Constants
-const DEFAULT_AVATAR = 'http://192.168.100.101:8081/assets/images/Settings/default-user-avatar.png';
+
+const DEFAULT_AVATAR = require('../assets/images/Settings/default-user-avatar.png');
 const API_BASE_URL = 'http://10.0.2.2:3000/api/v1';
 
 const SettingsScreen = ({ navigation }) => {
-  // State Management
   const [activeTab, setActiveTab] = useState('Profile');
   const [isLoading, setIsLoading] = useState(false);
-  const [profileImage, setProfileImage] = useState({ uri: DEFAULT_AVATAR });
+  const [profileImage, setProfileImage] = useState(DEFAULT_AVATAR);
   
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: '',
+    avatar: DEFAULT_AVATAR,
   });
 
   const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -70,7 +77,9 @@ const SettingsScreen = ({ navigation }) => {
         fullName: data.name || '',
         email: data.email || '',
         phone: data.phone || '',
+        avatar: data.avatar || DEFAULT_AVATAR,
       });
+      setProfileImage({ uri: data.avatar || DEFAULT_AVATAR });
     } catch (error) {
       showAlert('Error', 'Failed to load user data', 'error');
     }
@@ -81,10 +90,14 @@ const SettingsScreen = ({ navigation }) => {
       const token = await AsyncStorage.getItem('token');
       if (!token) throw new Error('No authentication token');
 
-      const response = await fetch(`${API_BASE_URL}/resetPassword/${token}`, {
+      const response = await fetch(`${API_BASE_URL}/auth/updatePassword`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
           password: passwordForm.newPassword,
           passwordConfirm: passwordForm.confirmPassword,
         }),
@@ -98,6 +111,74 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  const updateProfile = async () => {
+    setIsLoading(true);
+    loadUserData();
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) throw new Error('No authentication token');
+  
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+  
+      const data = await response.json();
+      console.log('User Data:', data);
+  
+      const updateFields = {};
+      if (formData.fullName && formData.fullName !== '' && formData.fullName !== data?.name) {
+        updateFields.name = formData.fullName;
+      }
+      if (formData.email && formData.email !== '' && formData.email !== data?.email) {
+        updateFields.email = formData.email;
+      }
+      if (formData.phone && formData.phone !== '' && formData.phone !== data?.phone) {
+        updateFields.phone = formData.phone;
+      }
+      if (formData.avatar && formData.avatar !== DEFAULT_AVATAR && formData.avatar !== profileImage.uri) {
+        updateFields.avatar = formData.avatar;
+      }
+  
+      if (Object.keys(updateFields).length === 0) {
+        showAlert('No Changes', 'No changes were made to your profile.', 'info');
+        return;
+      }
+  
+      const updateResponse = await fetch(`${API_BASE_URL}/users/updateProfile`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateFields),
+      });
+  
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        console.error('Error details:', errorData); // Log the error details from the response
+        throw new Error(errorData.message || 'Failed to update profile');
+      }
+  
+      const updatedData = await updateResponse.json();
+      setFormData({
+        fullName: updatedData.name || formData.fullName,
+        email: updatedData.email || formData.email,
+        phone: updatedData.phone || formData.phone,
+        avatar: updatedData.avatar || formData.avatar,
+      });
+      setProfileImage({ uri: updatedData.avatar || formData.avatar });
+      showAlert('Success', 'Profile updated successfully', 'success');
+    } catch (error) {
+      console.error('Update Profile Error:', error);
+      showAlert('Error', error.message || 'Failed to update profile', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };      
+    
   // UI Helper Functions
   const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
     setModal({ visible: true, title, message, type, showCancel, onConfirm });
@@ -124,6 +205,15 @@ const SettingsScreen = ({ navigation }) => {
     } catch (error) {
       showAlert('Error', 'Failed to select image', 'error');
     }
+  };
+
+  const handleProfileImageChange = (newImageUri) => {
+    setProfileImage({ uri: newImageUri });
+  
+    setFormData((prevData) => ({
+      ...prevData,
+      avatar: newImageUri, 
+    }));
   };
 
   const handleLogout = () => {
@@ -163,26 +253,6 @@ const SettingsScreen = ({ navigation }) => {
         </View>
       </View>
     </TouchableOpacity>
-  );
-
-  const InputField = ({ icon, label, value, onChangeText, ...props }) => (
-    <View style={styles.inputContainer}>
-      <View style={styles.iconWrapper}>
-        <MaterialIcons name={icon} size={24} color="#000" />
-      </View>
-      <View style={styles.inputWrapper}>
-        <Text style={styles.label}>{label}</Text>
-        <View style={styles.inputField}>
-          <TextInput
-            style={styles.input}
-            value={value}
-            onChangeText={onChangeText}
-            placeholderTextColor="#999"
-            {...props}
-          />
-        </View>
-      </View>
-    </View>
   );
 
   const AlertModal = () => (
@@ -226,123 +296,141 @@ const SettingsScreen = ({ navigation }) => {
     </Modal>
   );
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
-        {/* Header Section */}
-        <View style={styles.header}>
-          <Image 
-            source={{ uri: 'http://192.168.100.101:8081/assets/images/Settings/backgroundSettings.png' }} 
-            style={styles.coverImage} 
-          />
-          
-          {/* Profile Image */}
-          <View style={styles.profileSection}>
-            <View style={styles.profileImageContainer}>
-              <Image source={profileImage} style={styles.profileImage} />
-              <TouchableOpacity style={styles.editButton} onPress={handleImagePicker}>
-                <MaterialIcons name="edit" size={20} color="#4285F4" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Quick Action Buttons */}
-          <View style={styles.statButtonsContainer}>
-            <StatButton
-              icon={<MaterialIcons name="analytics" size={28} color="#FFF" />}
-              title="Learning Statistics"
-              color="#4A90E2"
-              onPress={() => navigation.navigate('ResultStatisticScreen')}
-            />
-            <StatButton
-              icon={<FontAwesome name="calendar" size={28} color="#FFF" />}
-              title="My Schedule"
-              color="#34A853"
-              onPress={() => navigation.navigate('ScheduleScreen')}
-            />
-          </View>
-        </View>
-
-        {/* Tab Navigation */}
-        <View style={styles.tabs}>
-          {['Profile', 'Password'].map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, activeTab === tab && styles.activeTab]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <MaterialIcons
-                name={tab === 'Profile' ? 'person' : 'lock'}
-                size={24}
-                color={activeTab === tab ? '#4285F4' : '#5F6368'}
-              />
-              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Form Content */}
-        <View style={styles.formContent}>
-          {activeTab === 'Profile' ? (
-            <>
-              <InputField
-                icon="person"
-                label="Full Name"
-                value={formData.fullName}
-                onChangeText={text => setFormData(prev => ({ ...prev, fullName: text }))}
-              />
-              <InputField
-                icon="email"
-                label="Email"
-                value={formData.email}
-                onChangeText={text => setFormData(prev => ({ ...prev, email: text }))}
-                keyboardType="email-address"
-              />
-              <InputField
-                icon="phone"
-                label="Phone"
-                value={formData.phone}
-                onChangeText={text => setFormData(prev => ({ ...prev, phone: text }))}
-                keyboardType="phone-pad"
-              />
-            </>
-          ) : (
-            <>
-              <InputField
-                icon="lock"
-                label="New Password"
-                value={passwordForm.newPassword}
-                onChangeText={text => setPasswordForm(prev => ({ ...prev, newPassword: text }))}
-                secureTextEntry
-              />
-              <InputField
-                icon="lock-outline"
-                label="Confirm Password"
-                value={passwordForm.confirmPassword}
-                onChangeText={text => setPasswordForm(prev => ({ ...prev, confirmPassword: text }))}
-                secureTextEntry
-              />
-            </>
-          )}
-
-          <TouchableOpacity
-            style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
-            onPress={activeTab === 'Profile' ? loadUserData : updatePassword}
-            disabled={isLoading}
+        return (
+          <KeyboardAwareScrollView
+            style={{ flex: 1 }}
+            enableOnAndroid={true}
+            extraHeight={120}
           >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <View style={styles.saveButtonContent}>
-                <MaterialIcons name="save" size={24} color="#fff" />
-                <Text style={styles.saveButtonText}>
-                  {activeTab === 'Profile' ? 'Save Changes' : 'Update Password'}
-                </Text>
+          <SafeAreaView style={styles.container}>
+            <ScrollView>
+              {/* Header Section */}
+              <View style={styles.header}>
+                <Image 
+                  source={require('../assets/images/Settings/backgroundSettings.png')} 
+                  style={styles.coverImage} 
+                />
+                
+                {/* Profile Image */}
+                <View style={styles.profileSection}>
+                  <View style={styles.profileImageContainer}>
+                    <Image source={profileImage} style={styles.profileImage} />
+                    <TouchableOpacity style={styles.editButton} onPress={handleImagePicker}>
+                      <MaterialIcons name="edit" size={20} color="#4285F4" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Quick Action Buttons */}
+                <View style={styles.statButtonsContainer}>
+                  <StatButton
+                    icon={<MaterialIcons name="analytics" size={28} color="#FFF" />}
+                    title="Learning Statistics"
+                    color="#4A90E2"
+                    onPress={() => navigation.navigate('ResultStatisticScreen')}
+                  />
+                  <StatButton
+                    icon={<FontAwesome name="calendar" size={28} color="#FFF" />}
+                    title="My Schedule"
+                    color="#34A853"
+                    onPress={() => navigation.navigate('ScheduleScreen')}
+                  />
+                </View>
               </View>
-            )}
-          </TouchableOpacity>
+
+              {/* Tab Navigation */}
+              <View style={styles.tabs}>
+                {['Profile', 'Password'].map(tab => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.tab, activeTab === tab && styles.activeTab]}
+                    onPress={() => setActiveTab(tab)}
+                  >
+                    <MaterialIcons
+                      name={tab === 'Profile' ? 'person' : 'lock'}
+                      size={24}
+                      color={activeTab === tab ? '#4285F4' : '#5F6368'}
+                    />
+                    <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                      {tab}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Form Content */}
+              <View style={styles.formContent}>
+              {activeTab === 'Profile' ? (
+          <>
+            <Input
+              icon="person"  // Use the name of the icon
+              iconPack= {MaterialIcons}  // Add the icon pack
+              label="Full Name"
+              value={formData.fullName}
+              onInputChanged={(id, text) => setFormData(prev => ({ ...prev, fullName: text }))}
+            />
+            <Input
+              icon="email"
+              iconPack={MaterialIcons}
+              label="Email"
+              value={formData.email}
+              onInputChanged={(id, text) => setFormData(prev => ({ ...prev, email: text }))}
+              keyboardType="email-address"
+            />
+            <Input
+              icon="phone"
+              iconPack={MaterialIcons}
+              label="Phone"
+              value={formData.phone}
+              onInputChanged={(id, text) => setFormData(prev => ({ ...prev, phone: text }))}
+              keyboardType="phone-pad"
+            />
+          </>
+        ) : (
+          <>
+            <Input
+              icon="lock"
+              iconPack={MaterialIcons}
+              label="Current Password"
+              value={passwordForm.currentPassword}
+              onInputChanged={(id, text) => setPasswordForm(prev => ({ ...prev, currentPassword: text }))}
+              secureTextEntry
+            />
+            <Input
+              icon="lock-outline"
+              iconPack={MaterialIcons}
+              label="New Password"
+              value={passwordForm.newPassword}
+              onInputChanged={(id, text) => setPasswordForm(prev => ({ ...prev, newPassword: text }))}
+              secureTextEntry
+            />
+            <Input
+              icon="lock-outline"
+              iconPack={MaterialIcons}
+              label="Confirm Password"
+              value={passwordForm.confirmPassword}
+              onInputChanged={(id, text) => setPasswordForm(prev => ({ ...prev, confirmPassword: text }))}
+              secureTextEntry
+            />
+          </>
+        )}
+
+        <TouchableOpacity
+          style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+          onPress={activeTab === 'Profile' ? updateProfile : updatePassword} // Use updateProfile for Profile tab
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <View style={styles.saveButtonContent}>
+              <MaterialIcons name="save" size={24} color="#fff" />
+              <Text style={styles.saveButtonText}>
+                {activeTab === 'Profile' ? 'Save Changes' : 'Update Password'}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -356,6 +444,7 @@ const SettingsScreen = ({ navigation }) => {
 
       <AlertModal />
     </SafeAreaView>
+    </KeyboardAwareScrollView>
   );
 };
 
@@ -660,71 +749,5 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-
-// Add form validation
-const validateForm = (data, type = 'profile') => {
-  const errors = {};
-  
-  if (type === 'profile') {
-    if (!data.fullName.trim()) {
-      errors.fullName = 'Full name is required';
-    }
-    
-    if (!data.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(data.email)) {
-      errors.email = 'Invalid email format';
-    }
-    
-    if (!data.phone.trim()) {
-      errors.phone = 'Phone number is required';
-    }
-  } else if (type === 'password') {
-    if (!data.newPassword) {
-      errors.newPassword = 'New password is required';
-    } else if (data.newPassword.length < 6) {
-      errors.newPassword = 'Password must be at least 6 characters';
-    }
-    
-    if (!data.confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password';
-    } else if (data.newPassword !== data.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
-    }
-  }
-  
-  return errors;
-};
-
-// Add error handling for API calls
-const handleApiError = (error) => {
-  let errorMessage = 'An unexpected error occurred';
-  
-  if (error.response) {
-    // Server responded with error
-    errorMessage = error.response.data.message || errorMessage;
-  } else if (error.request) {
-    // Request made but no response
-    errorMessage = 'Unable to connect to server';
-  }
-  
-  return errorMessage;
-};
-
-// Add loading state management
-const useLoading = (initialState = false) => {
-  const [isLoading, setIsLoading] = useState(initialState);
-  
-  const withLoading = async (callback) => {
-    setIsLoading(true);
-    try {
-      await callback();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  return [isLoading, withLoading];
-};
 
 export default SettingsScreen;
