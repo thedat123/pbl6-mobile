@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -50,9 +50,11 @@ const TestBase = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleAnswerSelect = (questionId, option) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: option }));
-    setQuestionStatus((prev) => ({ ...prev, [questionId]: 'answered' }));
+  const handlePartQuestionStatus = (partQuestionStatus) => {
+    setQuestionStatus(prev => ({
+      ...prev,
+      ...partQuestionStatus
+    }));
   };
 
   const handleQuestionPress = (questionId) => {
@@ -74,34 +76,41 @@ const TestBase = () => {
         {
           text: "Nộp bài",
           onPress: () => {
-            const unansweredQuestions = Object.keys(questionStatus).filter(
-              (id) => !answers[id]
-            ).length;
-
-            if (unansweredQuestions > 0) {
-              Alert.alert(
-                "Cảnh báo",
-                `Bạn còn ${unansweredQuestions} câu chưa trả lời. Bạn có chắc chắn muốn nộp bài?`,
-                [
-                  { text: "Kiểm tra lại", style: "cancel" },
-                  {
-                    text: "Nộp bài",
-                    onPress: () => Alert.alert("Thành công", "Bài thi của bạn đã được nộp!"),
-                  },
-                ]
-              );
-            } else {
-              navigation.navigate('ResultTestPageScreen');
-            }
+            const allTestResults = selectedParts.map((partNumber) => {
+              const partRef = testPartRef.current[partNumber];
+              return {
+                partNumber,
+                answers: partRef?.getAnswers() || {},
+                questionStatus: partRef?.getQuestionStatus() || {},
+                duration: partRef?.getTestDuration() || 0,
+                questionData: partRef?.getQuestionData() || [],
+              };
+            });
+  
+            const mergedResults = {
+              answers: allTestResults.reduce((acc, part) => ({ ...acc, ...part.answers }), {}),
+              questionStatus: allTestResults.reduce((acc, part) => ({ ...acc, ...part.questionStatus }), {}),
+              duration: allTestResults.reduce((total, part) => total + part.duration, 0),
+              questionData: allTestResults.flatMap((part) => part.questionData),
+            };
+  
+            // Tính tổng số câu hỏi từ tất cả các phần
+            const totalQuestions = mergedResults.questionData.reduce((acc, part) => acc + part.length, 0);
+  
+            // Gửi thông tin kết quả và tổng số câu hỏi đến ResultTestPageScreen
+            navigation.navigate('ResultTestPageScreen', {
+              testResults: mergedResults,
+              totalQuestions, // Thêm tổng số câu hỏi
+            });
           },
         },
       ]
     );
-  };
+  };        
 
   const renderPartNav = () => {
     if (selectedParts.length <= 1) return null;
-  
+
     return (
       <View style={styles.navContainer}>
         <TouchableOpacity
@@ -111,31 +120,25 @@ const TestBase = () => {
           <Text style={styles.navToggleText}>
             Part {currentPart}
           </Text>
-          <Ionicons 
-            name={isNavExpanded ? "chevron-up" : "chevron-down"} 
-            size={20} 
-            color="#2196F3" 
+          <Ionicons
+            name={isNavExpanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color="#2196F3"
           />
         </TouchableOpacity>
-  
+
         {isNavExpanded && (
           <View style={styles.partNavExpanded}>
-            {selectedParts.map(partNumber => (
+            {selectedParts.map((partNumber) => (
               <TouchableOpacity
                 key={partNumber}
-                style={[
-                  styles.partTab,
-                  currentPart === partNumber && styles.partTabActive
-                ]}
+                style={[styles.partTab, currentPart === partNumber && styles.partTabActive]}
                 onPress={() => {
                   setCurrentPart(partNumber);
                   setIsNavExpanded(false);
                 }}
               >
-                <Text style={[
-                  styles.partTabText,
-                  currentPart === partNumber && styles.partTabTextActive
-                ]}>
+                <Text style={[styles.partTabText, currentPart === partNumber && styles.partTabTextActive]}>
                   Part {partNumber}
                 </Text>
                 {currentPart === partNumber && (
@@ -150,41 +153,36 @@ const TestBase = () => {
   };
 
   const getAllQuestions = () => {
-    const allQuestions = selectedParts.flatMap(part =>
-      testPartRef.current[part]?.getQuestionData()?.flatMap(p => p.questions) || []
-    ).filter(question => question);
+    const allQuestions = selectedParts.flatMap(part => {
+      const partData = testPartRef.current[part]?.getQuestionData() || [];
+      return partData.flatMap(p => p.questions || []);
+    }).filter(Boolean);
     return allQuestions;
   };
 
   const renderCurrentPart = () => {
     switch (currentPart) {
-      case 1:
-        return <TestPart1 ref={(ref) => (testPartRef.current[1] = ref)} />;
-      case 2:
-        return <TestPart2 ref={(ref) => (testPartRef.current[2] = ref)} />;
-      case 3:
-        return <TestPart3 ref={(ref) => (testPartRef.current[3] = ref)} />;
-      case 4:
-        return <TestPart4 ref={(ref) => (testPartRef.current[4] = ref)} />;
-      case 5:
-        return <TestPart5 ref={(ref) => (testPartRef.current[5] = ref)} />;
-      case 6:
-        return <TestPart6 ref={(ref) => (testPartRef.current[6] = ref)} />;
-      case 7:
-        return <TestPart7 ref={(ref) => (testPartRef.current[7] = ref)} />;
-      default:
-        return <TestPart1 />;
+      case 1: return <TestPart1 ref={(ref) => (testPartRef.current[1] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
+      case 2: return <TestPart2 ref={(ref) => (testPartRef.current[2] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
+      case 3: return <TestPart3 ref={(ref) => (testPartRef.current[3] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
+      case 4: return <TestPart4 ref={(ref) => (testPartRef.current[4] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
+      case 5: return <TestPart5 ref={(ref) => (testPartRef.current[5] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
+      case 6: return <TestPart6 ref={(ref) => (testPartRef.current[6] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
+      case 7: return <TestPart7 ref={(ref) => (testPartRef.current[7] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
+      default: return <TestPart1 onQuestionStatusChange={handlePartQuestionStatus}/>;
     }
-  };  
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>
-            {selectedParts.length > 1 ? 'TEST PRACTICE' : `PART ${currentPart}`}
+            {selectedParts.length > 1 
+              ? `PART ${selectedParts.join(', ')}` // Hiển thị tất cả các part đã chọn
+              : `PART ${currentPart}`
+            }
           </Text>
           <View style={styles.timerContainer}>
             <Ionicons name="time-outline" size={20} color="#2196F3" />
@@ -201,19 +199,12 @@ const TestBase = () => {
         </View>
       </View>
 
-      <ScrollView 
-        ref={scrollViewRef} 
-        style={styles.questionContainer}
-        contentContainerStyle={styles.questionContentContainer}
-      >
+      <ScrollView ref={scrollViewRef} style={styles.questionContainer} contentContainerStyle={styles.questionContentContainer}>
         {renderCurrentPart()}
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.submitBtn} 
-          onPress={handleSubmit}
-        >
+        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
           <Text style={styles.submitBtnText}>Nộp bài</Text>
         </TouchableOpacity>
       </View>

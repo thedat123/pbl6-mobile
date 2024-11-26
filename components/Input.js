@@ -54,23 +54,23 @@ const styles = StyleSheet.create({
   inputContainer: {
     width: '100%',
     backgroundColor: colors.nearlyWhite,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 40,
+    paddingHorizontal: 10, // Reduced horizontal padding
+    paddingVertical: 8, // Reduced vertical padding
+    borderRadius: 30, // Smaller border radius
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.grey,
   },
   icon: {
-    marginLeft: 10,
+    marginLeft: 8, // Adjusted for smaller input size
     color: colors.grey,
   },
   input: {
     flex: 1,
     color: colors.textColor,
     fontFamily: 'regular',
-    fontSize: 15,
+    fontSize: 16, // Slightly smaller font size
   },
   errorContainer: {
     marginTop: 5,

@@ -43,7 +43,7 @@ const HomeNavigator = ({ navigation }) => {
             >
                 <Image
                     style={styles.cardImage}
-                    source={{ uri: imageUri }}
+                    source={imageUri}
                     resizeMode="contain"
                 />
                 <Text style={styles.cardDescription}>{description}</Text>
@@ -59,7 +59,7 @@ const HomeNavigator = ({ navigation }) => {
                         <View style={styles.imageContainer}>
                             <Image
                                 style={styles.logoImage}
-                                source={{ uri: 'http://192.168.100.101:8081/assets/images/Home/home_main.png' }}
+                                source={require('../assets/images/Home/home_main.png')}
                                 resizeMode="contain"
                             />
                         </View>
@@ -88,7 +88,7 @@ const HomeNavigator = ({ navigation }) => {
                     >
                         <Image
                             style={styles.featureImage}
-                            source={{ uri: 'http://192.168.100.101:8081/assets/images/Home/home_vocab.png' }}
+                            source={require('../assets/images/Home/home_vocab.png')}
                             resizeMode="contain"
                         />
                         <View style={styles.contentContainer}>
@@ -125,15 +125,15 @@ const HomeNavigator = ({ navigation }) => {
                         </Text>
                         <View style={styles.cardContainer}>
                             <Card
-                                imageUri="http://192.168.100.101:8081/assets/images/Home/card-img.png"
+                                imageUri={require('../assets/images/Home/card-img.png')}
                                 description="Practice with Recent TOEIC Tests"
                             />
                             <Card
-                                imageUri="http://192.168.100.101:8081/assets/images/Home/card-img_2.png"
+                                imageUri={require('../assets/images/Home/card-img_2.png')}
                                 description="Detailed Score Analysis & Explanations"
                             />
                             <Card
-                                imageUri="http://192.168.100.101:8081/assets/images/Home/card-img_3.png"
+                                imageUri={require('../assets/images/Home/card-img_3.png')}
                                 description="Track Your Progress & Improvement"
                             />
                         </View>

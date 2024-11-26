@@ -216,7 +216,7 @@ const TestScreen = () => {
             key={index}
             title={section.title}
             imageSource={{ uri: 'http://192.168.100.101:8081/assets/images/Test/toeic_test_home.png' }}
-            filter={searchText}  // Pass the active search text as a filter to TestSection
+            filter={searchText} 
             onTestPress={handleTestPress}
           />
         ))}

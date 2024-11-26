@@ -1,4 +1,3 @@
-// QuestionComponents.js
 import React from 'react';
 import {
   View,
@@ -9,23 +8,35 @@ import {
   Alert,
 } from 'react-native';
 
-// Navigation component for questions
-export const QuestionNavigation = ({ questions, currentQuestion, questionStatus, onQuestionPress }) => {
+export const QuestionNavigation = ({
+  questions,
+  currentQuestion,
+  questionStatus,
+  onQuestionPress,
+}) => {
   const [pressedQuestion, setPressedQuestion] = React.useState(null);
 
   const getQuestionStyle = (questionId) => {
     if (pressedQuestion === questionId) return styles.pressedQuestion;
+    
     const status = questionStatus[questionId];
-    if (status === 'review') return styles.reviewQuestion;
-    if (status === 'answered') return styles.answeredQuestion;
-    if (status === 'viewed') return styles.viewedQuestion;
-    return styles.normalQuestion;
+    switch (status) {
+      case 'review':
+        return styles.reviewQuestion;
+      case 'answered':
+        return styles.answeredQuestion;
+      case 'viewed':
+        return styles.viewedQuestion;
+      default:
+        return styles.normalQuestion;
+    }
   };
+  const safeQuestions = Array.isArray(questions) ? questions : [];
 
   return (
     <View style={styles.questionNav}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {questions.map((question) => (
+        {safeQuestions.map((question) => (
           <TouchableOpacity
             key={question.id}
             style={[styles.questionBtn, getQuestionStyle(question.id)]}
@@ -40,8 +51,7 @@ export const QuestionNavigation = ({ questions, currentQuestion, questionStatus,
             <Text
               style={[
                 styles.questionBtnText,
-                questionStatus[question.id] === 'answered' && styles.answeredQuestionText,
-                questionStatus[question.id] === 'review' && styles.reviewQuestionText,
+                questionStatus[question.id] === 'answered' && styles.answeredBtnText,
               ]}
             >
               {question.id}
@@ -60,42 +70,48 @@ export const QuestionNumber = ({ number }) => (
   </View>
 );
 
-// Options component
 export const QuestionOptions = ({ question, selectedAnswer, onAnswerSelect }) => {
   const [pressedOption, setPressedOption] = React.useState(null);
 
-  const renderOption = (option, index) => {
-    const isSelected = selectedAnswer === option.label;
-    return (
-      <TouchableOpacity
-        key={index}
-        style={[
-          styles.optionButton,
-          pressedOption === index && styles.pressedOption,
-          isSelected && styles.selectedOption,
-        ]}
-        onPress={() => onAnswerSelect(question.id, option.label)}
-        onPressIn={() => setPressedOption(index)}
-        onPressOut={() => setPressedOption(null)}
-      >
-        <View style={styles.optionRow}>
-          <View style={styles.radioButton}>
-            <View style={[
-              styles.radioInner,
-              isSelected && styles.radioInnerSelected
-            ]} />
-          </View>
-          <Text style={styles.optionText}>
-            {option.label}. {option.text}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <View style={styles.optionsContainer}>
-      {question.options.map((option, index) => renderOption(option, index))}
+      {question.options.map((option, index) => {
+        const isSelected = selectedAnswer === option.label;
+        
+        return (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.optionButton,
+              pressedOption === index && styles.pressedOption,
+              isSelected && styles.selectedOption,
+            ]}
+            onPress={() => {
+              // If the option is already selected, deselect it
+              onAnswerSelect(
+                question.id, 
+                isSelected ? null : option.label
+              );
+            }}
+            onPressIn={() => setPressedOption(index)}
+            onPressOut={() => setPressedOption(null)}
+          >
+            <View style={styles.optionRow}>
+              <View style={styles.radioButton}>
+                <View
+                  style={[
+                    styles.radioInner,
+                    isSelected && styles.radioInnerSelected,
+                  ]}
+                />
+              </View>
+              <Text style={styles.optionText}>
+                {option.label}. {option.text}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
@@ -137,6 +153,10 @@ const styles = StyleSheet.create({
   reviewQuestion: {
     backgroundColor: '#FFEB3B',
     borderColor: '#FFC107',
+  },
+  pressedQuestion: {
+    backgroundColor: '#FFCDD2',
+    borderColor: '#E57373',
   },
   answeredQuestionText: {
     color: '#1B5E20',

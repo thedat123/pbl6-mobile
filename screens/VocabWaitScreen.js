@@ -5,22 +5,19 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 const VocabWaitScreen = () => {
   const navigation = useNavigation();
-  const route = useRoute();  // Access route params
-  const { topicId } = route.params;  // Get the passed topicId
+  const route = useRoute(); 
+  const { topicId } = route.params;  
 
   return (
     <LinearGradient
       colors={['#f7f8fa', '#d6e4ff']} // Soft gradient background
       style={styles.container}
     >
-      {/* Image Section */}
       <Image
-        source={{ uri: 'http://192.168.100.101:8081/assets/images/Vocab/finish.png' }}
+        source={require('../assets/images/Vocab/finish.png')}
         style={styles.image}
       />
-      {/* Message Section */}
       <Text style={styles.message}>Bạn vừa hoàn thành phần từ vựng</Text>
-      {/* Button Section */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={styles.buttonContinue}
@@ -32,7 +29,7 @@ const VocabWaitScreen = () => {
         <TouchableOpacity
           style={styles.buttonCheck}
           activeOpacity={0.8}
-          onPress={() => navigation.navigate('VocabTestScreen')}
+          onPress={() => navigation.navigate('VocabTestScreen', { topicId: topicId })}
         >
           <Text style={styles.buttonText}>KIỂM TRA</Text>
         </TouchableOpacity>

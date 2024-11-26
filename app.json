@@ -18,7 +18,8 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "newArchEnabled": true
     },
     "android": {
       "adaptiveIcon": {
@@ -26,7 +27,8 @@
         "backgroundColor": "#FFFFFF"
       },
       "jsEngine": "hermes",
-      "package": "com.whatsappclone.whatsApp"
+      "package": "com.whatsappclone.whatsApp",
+      "newArchEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
