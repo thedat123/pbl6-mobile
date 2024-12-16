@@ -1,265 +1,424 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  Image,
+  ScrollView,
+} from "react-native";
+import { API_BASE_URL } from "@env";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const Comment = () => {
-  const [comment, setComment] = useState('');
-  const [comments, setComments] = useState([
-    {
-      id: '1',
-      user: 'MaiLinhe1590a40fda54d67_99826',
-      avatar: 'M',
-      text: 'Ai có cách chỉ mình với nha 😊',
-      date: 'Tháng 10. 23, 2024',
-      replies: [],
-    },
-    {
-      id: '2',
-      user: 'tashahd',
-      avatar: 'T',
-      text: 'p6 mình hay sai phần điền nguyên câu có cách nào khắc phục không ạ',
-      date: 'Tháng 10. 23, 2024',
-      replies: [],
-    },
-  ]);
-  const [reply, setReply] = useState('');
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [replyToReply, setReplyToReply] = useState(null);
+const Comment = ({ idTest }) => {
+  const [comment, setComment] = useState("");
+  const [comments, setComments] = useState([]);
+  const [reply, setReply] = useState({});
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  const addComment = () => {
+  const fetchComments = async (pageNum = 1) => {
+    if (loading || !hasMore) return;
+
+    setLoading(true);
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}:3001/api/v1/comment/test/${idTest}`,
+        {
+          params: { page: pageNum, limit: 10 },
+        }
+      );
+
+      const newComments = response.data.map((comment) => ({
+        ...comment,
+        subComment: comment.subComment || [],
+        expanded: false,
+      }));
+
+      setComments((prev) =>
+        pageNum === 1 ? newComments : [...prev, ...newComments]
+      );
+
+      setHasMore(newComments.length === 10);
+      setPage(pageNum);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchComments(1);
+  }, [idTest]);
+
+  const loadMoreComments = () => {
+    if (!loading && hasMore) {
+      fetchComments(page + 1);
+    }
+  };
+
+  const addComment = async () => {
     if (comment.trim()) {
-      const newComment = {
-        id: String(comments.length + 1),
-        user: 'CurrentUser',
-        avatar: 'U',
-        text: comment,
-        date: new Date().toLocaleDateString('vi-VN', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        }),
-        replies: [],
-      };
-      setComments([newComment, ...comments]);
-      setComment('');
+      try {
+        const newComment = {
+          content: comment,
+          idTest: idTest,
+        };
+        console.log(newComment);
+        const token = await AsyncStorage.getItem("token");
+        if (!token) {
+          throw new Error(
+            "Authentication token not found. Please log in again."
+          );
+        }
+        const response = await axios.post(
+          `${API_BASE_URL}:3001/api/v1/comment/`,
+          newComment,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        setComments([response.data, ...comments]);
+        setComment("");
+      } catch (error) {
+        console.error("Error adding comment:", error);
+      }
     }
   };
 
-  const addReply = (commentId, parentReplyId = null) => {
-    if (reply.trim()) {
-      const newReply = {
-        id: String(new Date().getTime()),
-        user: 'DatDeptrai',
-        avatar: 'D',
-        text: reply,
-        date: new Date().toLocaleDateString('vi-VN', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        }),
-      };
-      setComments(comments.map(comment =>
-        comment.id === commentId
-          ? {
-              ...comment,
-              replies: parentReplyId
-                ? comment.replies.map(reply =>
-                    reply.id === parentReplyId
-                      ? { ...reply, replies: [newReply, ...(reply.replies || [])] }
-                      : reply
-                  )
-                : [newReply, ...comment.replies],
+  const addReply = async (commentId, parentId = null) => {
+    if (reply[commentId]?.trim()) {
+      try {
+        const newReply = {
+          text: reply[commentId],
+          user: { name: "Current User", avatar: "default-avatar.png" },
+          createdAt: new Date().toISOString(),
+        };
+        const response = await axios.post(
+          `${API_BASE_URL}:3001/api/v1/comment/test/${idTest}/${commentId}`,
+          { ...newReply, parentId }
+        );
+
+        setComments(
+          comments.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  subComment: [response.data, ...comment.subComment],
+                  expanded: true,
+                }
+              : comment
+          )
+        );
+
+        setReply((prev) => ({ ...prev, [commentId]: "" }));
+      } catch (error) {
+        console.error("Error adding reply:", error);
+      }
+    }
+  };
+
+  const renderFooter = () => {
+    return loading ? (
+      <View style={styles.loadingContainer}>
+        <Text>Loading more comments...</Text>
+      </View>
+    ) : null;
+  };
+
+  const renderComment = ({ item }) => (
+    <View style={styles.commentContainer}>
+      <View style={styles.commentHeader}>
+        <View style={styles.userInfoContainer}>
+          <Image
+            source={{ uri: item.user.avatar || "default-avatar.png" }}
+            style={styles.avatar}
+          />
+          <View>
+            <Text style={styles.userName}>{item.user.name}</Text>
+            <Text style={styles.timestamp}>
+              {new Date(item.createdAt).toLocaleString()}
+            </Text>
+            <Text style={styles.commentText}>{item.content}</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.replyButton}
+          onPress={() => {
+            setReply((prev) => ({
+              ...prev,
+              [item.id]: prev[item.id] ? "" : prev[item.id] || "",
+            }));
+          }}
+        >
+          <Text style={styles.replyButtonText}>Reply</Text>
+        </TouchableOpacity>
+      </View>
+  
+      {/* Nested Replies */}
+      {item.subComment && item.subComment.length > 0 && (
+        <View style={styles.repliesContainer}>
+          {item.subComment.map((subComment, subIndex) => (
+            <View key={`${subComment.id}-${subIndex}`} style={styles.replyBubble}>
+              <View style={styles.replyHeader}>
+                <Image
+                  source={{ uri: subComment.user.avatar || "default-avatar.png" }}
+                  style={styles.replyAvatar}
+                />
+                <Text style={styles.replyUserName}>{subComment.user.name}</Text>
+              </View>
+              <Text style={styles.replyText}>{subComment.text}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+  
+      {/* Reply Input */}
+      {reply[item.id] !== undefined && (
+        <View style={styles.replyInputContainer}>
+          <TextInput
+            style={styles.replyInput}
+            placeholder="Write a reply..."
+            placeholderTextColor="#6B7280"
+            value={reply[item.id]}
+            onChangeText={(text) =>
+              setReply((prev) => ({ ...prev, [item.id]: text }))
             }
-          : comment
-      ));
-      setReply('');
-      setReplyingTo(null);
-      setReplyToReply(null);
-    }
-  };
-
-  const renderReply = (replyItem) => (
-    <View key={replyItem.id} style={styles.replyItem}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{replyItem.avatar}</Text>
-      </View>
-      <View style={styles.commentContent}>
-        <View style={styles.commentHeader}>
-          <Text style={styles.userName}>{replyItem.user}</Text>
-          <Text style={styles.commentDate}>{replyItem.date}</Text>
+            multiline
+          />
+          <TouchableOpacity
+            style={styles.sendReplyButton}
+            onPress={() => addReply(item.id)}
+          >
+            <Text style={styles.sendReplyButtonText}>Send</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.commentText}>{replyItem.text}</Text>
-        <TouchableOpacity style={styles.replyButton} onPress={() => setReplyToReply(replyItem.id)}>
-          <Text style={styles.replyButtonText}>Trả lời</Text>
-        </TouchableOpacity>
-        {replyToReply === replyItem.id && (
-          <View style={styles.replyInputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Viết phản hồi..."
-              value={reply}
-              onChangeText={setReply}
-              multiline
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={() => addReply(replyItem.id)} disabled={!reply.trim()}>
-              <Text style={styles.sendButtonText}>Gửi</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {replyItem.replies && replyItem.replies.map(renderReply)}
-      </View>
+      )}
     </View>
   );
-
-  const renderItem = ({ item }) => (
-    <View style={styles.commentItem}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{item.avatar}</Text>
-      </View>
-      <View style={styles.commentContent}>
-        <View style={styles.commentHeader}>
-          <Text style={styles.userName}>{item.user}</Text>
-          <Text style={styles.commentDate}>{item.date}</Text>
-        </View>
-        <Text style={styles.commentText}>{item.text}</Text>
-        <TouchableOpacity style={styles.replyButton} onPress={() => setReplyingTo(item.id)}>
-          <Text style={styles.replyButtonText}>Trả lời</Text>
-        </TouchableOpacity>
-        {replyingTo === item.id && (
-          <View style={styles.replyInputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Viết phản hồi..."
-              value={reply}
-              onChangeText={setReply}
-              multiline
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={() => addReply(item.id)} disabled={!reply.trim()}>
-              <Text style={styles.sendButtonText}>Gửi</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {item.replies.map(renderReply)}
-      </View>
-    </View>
-  );
+  
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Comment Input */}
+      <View style={styles.commentInputContainer}>
         <TextInput
-          style={styles.input}
-          placeholder="Chia sẻ cảm nghĩ của bạn..."
+          style={styles.commentInput}
+          placeholder="Share your thoughts..."
+          placeholderTextColor="#6B7280"
           value={comment}
           onChangeText={setComment}
           multiline
         />
-        <TouchableOpacity style={styles.sendButton} onPress={addComment} disabled={!comment.trim()}>
-          <Text style={styles.sendButtonText}>Gửi</Text>
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            !comment.trim() && styles.sendButtonDisabled,
+          ]}
+          onPress={addComment}
+          disabled={!comment.trim()}
+        >
+          <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
+
       <FlatList
         data={comments}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        renderItem={renderComment}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
+        onEndReached={loadMoreComments}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
+        }
+        contentContainerStyle={styles.commentList}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    padding: 16,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    elevation: 2,
-    marginVertical: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  input: {
+  container: {
     flex: 1,
-    borderColor: '#ccc',
+    backgroundColor: "#F4F6F8",
+  },
+  commentInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
+  },
+  commentInput: {
+    flex: 1,
+    minHeight: 48,
+    maxHeight: 120,
+    borderColor: "#BDBDBD",
     borderWidth: 1,
-    borderRadius: 4,
-    padding: 8,
-    marginRight: 8,
-    backgroundColor: '#f9f9f9',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 12,
+    backgroundColor: "#FFFFFF",
+    fontSize: 16,
+    color: "#212121",
   },
   sendButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: "#1E88E5",
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 4,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sendButtonDisabled: {
+    backgroundColor: "#BBDEFB",
   },
   sendButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
-  commentItem: {
-    flexDirection: 'row',
-    marginVertical: 8,
-    padding: 12,
-    backgroundColor: '#f1f1f1',
-    borderRadius: 8,
+  commentList: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#e0e0e0',
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  commentContent: {
-    flex: 1,
-    marginLeft: 8,
+  commentContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   commentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  userInfoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
   },
   userName: {
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#424242",
   },
-  commentDate: {
-    color: '#777',
+  timestamp: {
+    fontSize: 14,
+    color: "#9E9E9E",
+    marginTop: 4,
   },
   commentText: {
-    marginBottom: 8,
+    fontSize: 16,
+    color: "#616161",
+    lineHeight: 24,
+    marginBottom: 12,
   },
   replyButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: '#007bff',
-    borderRadius: 4,
+    backgroundColor: "#E3F2FD",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
   },
   replyButtonText: {
-    color: '#fff',
+    color: "#1E88E5",
     fontSize: 14,
-  },
-  replyItem: {
-    flexDirection: 'row',
-    marginVertical: 8,
-    padding: 12,
-    backgroundColor: '#e9e9e9',
-    borderRadius: 8,
-    marginLeft: 40,
+    fontWeight: "500",
   },
   replyInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+  },
+  replyInput: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 80,
+    borderColor: "#BDBDBD",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 12,
+    backgroundColor: "#FFFFFF",
+    fontSize: 14,
+    color: "#212121",
+  },
+  sendReplyButton: {
+    backgroundColor: "#1E88E5",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  sendReplyButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  repliesContainer: {
+    marginTop: 12,
+    paddingLeft: 16,
+    borderLeftWidth: 2,
+    borderLeftColor: "#E0E0E0",
+  },
+  replyBubble: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  replyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  replyAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  replyUserName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#424242",
+  },
+  replyText: {
+    fontSize: 14,
+    color: "#757575",
+    marginTop: 4,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#9E9E9E",
+    fontSize: 16,
+    marginTop: 32,
   },
 });
+
 
 export default Comment;

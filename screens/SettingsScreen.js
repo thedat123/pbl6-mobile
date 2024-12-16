@@ -20,10 +20,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Input from '../components/Input';
-
+import { API_BASE_URL } from '@env';
 
 const DEFAULT_AVATAR = require('../assets/images/Settings/default-user-avatar.png');
-const API_BASE_URL = 'http://10.0.2.2:3000/api/v1';
 
 const SettingsScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('Profile');
@@ -57,29 +56,40 @@ const SettingsScreen = ({ navigation }) => {
     loadUserData();
   }, []);
 
-  // API Functions
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []);   
+
   const loadUserData = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
+      console.log(token);
       if (!token) return;
-
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+  
+      const response = await fetch(`${API_BASE_URL}:3001/api/v1/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
-
+  
       if (!response.ok) throw new Error('Failed to fetch user data');
-
+  
       const data = await response.json();
+      const avatarUri = data.avatar || DEFAULT_AVATAR;
+  
       setFormData({
         fullName: data.name || '',
         email: data.email || '',
         phone: data.phone || '',
-        avatar: data.avatar || DEFAULT_AVATAR,
+        avatar: avatarUri,
       });
-      setProfileImage({ uri: data.avatar || DEFAULT_AVATAR });
+  
+      setProfileImage(typeof avatarUri === 'string' && avatarUri !== '' ? { uri: avatarUri } : DEFAULT_AVATAR);
     } catch (error) {
       showAlert('Error', 'Failed to load user data', 'error');
     }
@@ -90,7 +100,7 @@ const SettingsScreen = ({ navigation }) => {
       const token = await AsyncStorage.getItem('token');
       if (!token) throw new Error('No authentication token');
 
-      const response = await fetch(`${API_BASE_URL}/auth/updatePassword`, {
+      const response = await fetch(`${API_BASE_URL}:3001/api/v1/auth/updatePassword`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -118,7 +128,7 @@ const SettingsScreen = ({ navigation }) => {
       const token = await AsyncStorage.getItem('token');
       if (!token) throw new Error('No authentication token');
   
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      const response = await fetch(`${API_BASE_URL}:3001/api/v1/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -138,7 +148,8 @@ const SettingsScreen = ({ navigation }) => {
       if (formData.phone && formData.phone !== '' && formData.phone !== data?.phone) {
         updateFields.phone = formData.phone;
       }
-      if (formData.avatar && formData.avatar !== DEFAULT_AVATAR && formData.avatar !== profileImage.uri) {
+      
+      if (formData.avatar && formData.avatar !== DEFAULT_AVATAR && typeof formData.avatar === 'string') {
         updateFields.avatar = formData.avatar;
       }
   
@@ -147,7 +158,7 @@ const SettingsScreen = ({ navigation }) => {
         return;
       }
   
-      const updateResponse = await fetch(`${API_BASE_URL}/users/updateProfile`, {
+      const updateResponse = await fetch(`${API_BASE_URL}:3001/api/v1/users/updateProfile`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -208,12 +219,22 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleProfileImageChange = (newImageUri) => {
-    setProfileImage({ uri: newImageUri });
-  
-    setFormData((prevData) => ({
-      ...prevData,
-      avatar: newImageUri, 
-    }));
+    // Ensure newImageUri is a valid string
+    if (typeof newImageUri === 'string' && newImageUri !== '') {
+      setProfileImage({ uri: newImageUri });
+    
+      setFormData((prevData) => ({
+        ...prevData,
+        avatar: newImageUri, 
+      }));
+    } else {
+      setProfileImage(DEFAULT_AVATAR);
+      
+      setFormData((prevData) => ({
+        ...prevData,
+        avatar: DEFAULT_AVATAR, 
+      }));
+    }
   };
 
   const handleLogout = () => {

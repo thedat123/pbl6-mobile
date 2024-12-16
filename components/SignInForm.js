@@ -1,40 +1,51 @@
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
-import Input from '../components/Input';
-import { validateInput } from '../utils/actions/formActions';
-import { reducer } from '../utils/reducers/formReducer';
-import { signIn } from '../utils/actions/authActions';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View, Dimensions, Platform } from 'react-native';
-import { useDispatch } from 'react-redux';
-import colors from '../constants/colors';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { reducer } from '../utils/reducers/formReducer';
+import axios from 'axios';
+import { API_BASE_URL } from '@env';
+import * as Google from 'expo-auth-session/providers/google';
+import colors from '../constants/colors';
+import { Feather } from '@expo/vector-icons';
+import Input from './Input'; // Import your Input component
+import { validateInput } from '../utils/actions/formActions';
+import * as AuthSession from 'expo-auth-session';
 
 const { width } = Dimensions.get('window');
 const isSmallDevice = width < 360;
 
 const initialState = {
   inputValues: {
-    username: '',  // userName instead of email
+    username: '',
     password: '',
   },
   inputValidities: {
-    username: false,  // userName instead of email
+    username: false,
     password: false,
   },
   formIsValid: false,
 };
 
-
 const SignInForm = (props) => {
   const [isEnablePass, setIsEnablePass] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-
-  const navigation = useNavigation();
-  const dispatch = useDispatch();
   const [error, setError] = useState();
   const [isLoading, setIsLoading] = useState(false);
   const [formState, dispatchFormState] = useReducer(reducer, initialState);
+  const navigation = useNavigation();
+  const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
+
+  // Google Auth Request
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: '143329823343-dreg2jdisir6cc2h0ja30i9fjlgvbncd.apps.googleusercontent.com',
+    androidClientId: 'GOOGLE_GUID.apps.googleusercontent.com',
+    iosClientId: 'GOOGLE_GUID.apps.googleusercontent.com',
+    scopes: ['profile', 'email'],
+    redirectUri,
+    responseType: 'token', // Switch to token response type
+  });  
 
   const inputChangedHandler = useCallback((inputId, inputValue) => {
     const result = validateInput(inputId, inputValue);
@@ -44,52 +55,114 @@ const SignInForm = (props) => {
       inputValue,
     });
   }, []);
+
+  useEffect(() => {
+    console.log('Google Auth Request:', request);
+    console.log('Google Auth Response:', response);
   
+    if (response?.type === 'success') {
+      console.log('Google Auth Success:', response.params);
+      getGoogleUser(response.params.access_token);
+    } else if (response?.type === 'error') {
+      console.error('Google Auth Error:', response.error);
+    }
+  }, [response]);  
 
   useEffect(() => {
     if (error) {
-      Alert.alert("An error occurred", error, [{ text: "Okay" }]);
+      Alert.alert('An error occurred', error, [{ text: 'Okay' }]);
     }
   }, [error]);
 
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []); 
+
+  useEffect(() => {
+    console.log(response);
+    if (response?.type === 'success') {
+      const exchangeTokens = async () => {
+        try {
+          const { code } = response.params;
+          const tokenResponse = await axios.post(
+            'https://oauth2.googleapis.com/token',
+            {
+              code,
+              client_id: 'GOOGLE_GUID.apps.googleusercontent.com',
+              client_secret: 'YOUR_CLIENT_SECRET',
+              redirect_uri: redirectUri,
+              grant_type: 'authorization_code',
+            }
+          );
+          console.log('Token Response:', tokenResponse.data);
+          // Save token and navigate
+          await AsyncStorage.setItem('token', tokenResponse.data.access_token);
+          navigation.navigate('MainAppNavigator');
+        } catch (error) {
+          console.error('Token Exchange Error:', error);
+        }
+      };
+      exchangeTokens();
+    } else if (response?.type === 'error') {
+      console.error('Google Auth Error:', response.error);
+    }
+  }, [response]);
+  
+
+  const getGoogleUser = async (accessToken) => {
+    try {
+      console.log(accessToken);
+      const gUserReq = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      console.log(gUserReq.data);
+      await AsyncStorage.setItem('token', accessToken);
+      navigation.navigate('MainAppNavigator');
+    } catch (error) {
+      console.log('GoogleUserReq error: ', error);
+      setError(error.message);
+    }
+  };
+
   const authHandler = useCallback(async () => {
-  setIsLoading(true);
-
-  const baseURL =
-    Platform.OS === 'ios'
-      ? 'http://localhost:3000/api/v1/auth/login'  // iOS Emulator
-      : 'http://10.0.2.2:3000/api/v1/auth/login';  // Android Emulator
-
+    setIsLoading(true);
+    console.log('Form State Before Submission:', formState);
+  
+    const baseURL = Platform.OS === 'ios' ? 'http://localhost:3001/api/v1/auth/login' : `${API_BASE_URL}:3001/api/v1/auth/login`;
     try {
       const response = await fetch(baseURL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: formState.inputValues.username,
           password: formState.inputValues.password,
         }),
       });
-
+  
       const result = await response.json();
-
+      console.log('Login Response:', result);
+  
       if (!response.ok) {
         throw new Error(result.message || 'Something went wrong!');
       }
-
-      // Lưu token vào AsyncStorage nếu đăng nhập thành công
+  
       await AsyncStorage.setItem('token', result.token);
-      console.log('Token:', result.token);
-      setError(null);
+      await AsyncStorage.setItem('userId', result.user.id);
       navigation.navigate('MainAppNavigator');
     } catch (error) {
-      console.error('Error:', error.message);
+      console.error('Login Error:', error.message);
       setError(error.message);
     } finally {
       setIsLoading(false);
     }
-  }, [formState]);  
+  }, [formState]);
+  
 
   const togglePasswordVisibility = () => {
     setIsPasswordVisible((prev) => !prev);
@@ -100,29 +173,30 @@ const SignInForm = (props) => {
   };
 
   return (
-    <View>
+    <View style={styles.container}>
+      {/* Existing Username and Password Inputs */}
       <Input
-        id="username"  // id should be userName
+        id="username"
         label="Username"
-        value={formState.inputValues.userName}  // Bind to userName
+        value={formState.inputValues.username}
         onInputChanged={inputChangedHandler}
         autoCapitalize="none"
-        errorText={formState.inputValidities.userName}  // Update validity check for userName
+        errorText={formState.inputValidities.username}
       />
-
       <Input
         id="password"
         label="Password"
         autoCapitalize="none"
         secureTextEntry={!isPasswordVisible}
         onInputChanged={inputChangedHandler}
-        value={formState.inputValues.password}  // Bind to password
+        value={formState.inputValues.password}
         errorText={formState.inputValidities.password}
         icon={isPasswordVisible ? 'eye' : 'eye-off'}
         iconPack={Ionicons}
         onIconPress={togglePasswordVisibility}
       />
 
+      {/* Remember Me & Forgot Password */}
       <View style={styles.rememberParent}>
         <View style={styles.rememberZone}>
           <TouchableOpacity onPress={enableRememberPassword}>
@@ -140,23 +214,35 @@ const SignInForm = (props) => {
         </TouchableOpacity>
       </View>
 
+      {/* Login Button */}
       {isLoading ? (
         <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 10 }} />
       ) : (
         <TouchableOpacity
           style={styles.loginButton}
           onPress={authHandler}
-          disabled={!formState.formIsValid}  // Button is enabled only when formIsValid is true
+          disabled={!formState.formIsValid}
         >
           <Text style={styles.buttonText}>Log in</Text>
         </TouchableOpacity>
-
       )}
+
+      {/* Google Login Button */}
+      <TouchableOpacity
+        style={styles.socialButton}
+        onPress={() => promptAsync()} // Triggers Google sign-in flow
+      >
+        <Ionicons name="logo-google" size={24} color="white" />
+        <Text style={styles.socialText}>Login with Google</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    padding: 20,
+  },
   loginButton: {
     backgroundColor: '#40B671',
     borderRadius: 40,
@@ -181,6 +267,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: isSmallDevice ? 14 : 16,
     textAlign: 'center',
+  },
+  socialContainer: {
+    marginTop: 20,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#4285F4', // Google color
+    borderRadius: 40,
+    height: 50,
+    marginBottom: 10,
+  },
+  socialText: {
+    color: '#FFFFFF',
+    marginLeft: 10,
+    fontSize: isSmallDevice ? 14 : 16,
+  },
+  subText: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
 });
 

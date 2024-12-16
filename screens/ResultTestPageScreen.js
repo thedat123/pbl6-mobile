@@ -21,7 +21,6 @@ const ResultTestPageScreen = ({ route }) => {
   const navigation = useNavigation();
 
   const renderHeader = () => {
-    // Get selected parts from the partDetails
     const selectedPartTags = Object.keys(results.partDetails).sort().map(part => (
       <View key={part} style={styles.partTag}>
         <Text style={styles.partTagText}>Part {part}</Text>

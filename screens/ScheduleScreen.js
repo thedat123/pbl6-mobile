@@ -13,6 +13,8 @@ import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '@env';
+import axios from 'axios';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -41,21 +43,28 @@ const loadNotificationSettings = async () => {
 };
 
 const ScheduleScreen = () => {
-  // Basic states
   const [examDate, setExamDate] = useState(new Date());
+  const [targetScore, setTargetScore] = useState('');
   const [daysUntilExam, setDaysUntilExam] = useState(null);
   const [notificationMessage, setNotificationMessage] = useState("Don't forget to study!");
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
-  const [reminderMode, setReminderMode] = useState('daily'); // 'daily', 'weekly', 'specific'
+  const [reminderMode, setReminderMode] = useState('daily'); 
   const [dailyTime, setDailyTime] = useState(new Date());
-  const [weeklyDay, setWeeklyDay] = useState(0); // 0 = Sunday, 6 = Saturday
+  const [weeklyDay, setWeeklyDay] = useState(0); 
   const [weeklyTime, setWeeklyTime] = useState(new Date());
   const [specificDate, setSpecificDate] = useState(new Date());
   const [specificTime, setSpecificTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [currentTimePickerMode, setCurrentTimePickerMode] = useState(''); // 'daily', 'weekly', 'specific'
-
+  const [currentTimePickerMode, setCurrentTimePickerMode] = useState('');
+  const [modal, setModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    onConfirm: () => {},
+    showCancel: false,
+  });
   useEffect(() => {
     requestNotificationPermission();
     calculateDaysUntilExam();
@@ -64,6 +73,45 @@ const ScheduleScreen = () => {
       responseListener.remove();
     };
   }, [examDate]);
+
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []);  
+
+  useEffect(() => {
+    const saveDaysUntilExam = async () => {
+      try {
+        await AsyncStorage.setItem('daysUntilExam', JSON.stringify(daysUntilExam));
+        console.log('Days until exam saved:', daysUntilExam);
+      } catch (error) {
+        console.error('Failed to save daysUntilExam:', error);
+      }
+    };
+  
+    if (daysUntilExam !== null) {
+      saveDaysUntilExam();
+    }
+  }, [daysUntilExam]);
+  
+  useEffect(() => {
+    const loadDaysUntilExam = async () => {
+      try {
+        const savedDays = await AsyncStorage.getItem('daysUntilExam');
+        if (savedDays !== null) {
+          setDaysUntilExam(JSON.parse(savedDays));
+        }
+      } catch (error) {
+        console.error('Failed to load daysUntilExam:', error);
+      }
+    };
+  
+    loadDaysUntilExam();
+  }, []);
+  
 
   useEffect(() => {
     const initializeSettings = async () => {
@@ -113,6 +161,74 @@ const ScheduleScreen = () => {
     setDaysUntilExam(days);
   };
 
+  const showAlert = (title, message, type) => {
+    setModal({
+      visible: true,
+      title,
+      message,
+      type,
+      showCancel: false,
+      onConfirm: () => setModal({ ...modal, visible: false }), // Close the modal
+    });
+  };
+
+  const updateProfile = async (targetScore, testDate) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      console.log(token);
+      if (!token) {
+        Alert.alert('Error', 'You need to be logged in to update your profile.');
+        return;
+      }
+  
+      // Ensure testDate is a Date object and convert to ISO string
+      const formattedTestDate = testDate instanceof Date ? testDate.toISOString() : new Date(testDate).toISOString();
+  
+      const response = await axios.patch(`${API_BASE_URL}:3001/api/v1/users/updateProfile`, {
+        targetScore: targetScore,
+        testDate: formattedTestDate,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+  
+      console.log('Profile updated successfully:', response.data);
+      showAlert(
+        'Success',
+        'Your target score and exam date have been updated successfully!',
+        'success'
+      );
+    } catch (error) {
+      if (error.response) {
+        // Server responded with a non-2xx status
+        console.error('Failed to update profile:', error.response.data);
+        showAlert(
+          'Error',
+          `Failed to update profile: ${error.response.data.message || 'Unknown error'}`,
+          'error'
+        );
+      } else if (error.request) {
+        // No response was received from the server
+        console.error('No response from server:', error.request);
+        showAlert(
+          'Error',
+          'No response from the server. Please check your network connection.',
+          'error'
+        );
+      } else {
+        // Something else went wrong
+        console.error('Error updating profile:', error.message);
+        showAlert(
+          'Error',
+          'An error occurred while updating your profile. Please try again.',
+          'error'
+        );
+      }
+    }
+  };    
+
   const requestNotificationPermission = async () => {
     try {
       const { status } = await Notifications.requestPermissionsAsync();
@@ -136,7 +252,6 @@ const ScheduleScreen = () => {
 
   const scheduleNotifications = async () => {
     try {
-      // Cancel all existing notifications to avoid duplicates
       await Notifications.cancelAllScheduledNotificationsAsync();
   
       if (!isNotificationEnabled) {
@@ -154,12 +269,11 @@ const ScheduleScreen = () => {
           dailyTriggerTime.setMinutes(dailyTime.getMinutes());
           dailyTriggerTime.setSeconds(0);
   
-          // Nếu thời gian hôm nay đã qua, đặt thông báo cho ngày mai
           if (dailyTriggerTime <= now) {
             dailyTriggerTime.setDate(dailyTriggerTime.getDate() + 1);
           }
   
-          trigger = dailyTriggerTime; // Sử dụng thời gian chính xác cho trigger
+          trigger = dailyTriggerTime;
           break;
         }
   
@@ -169,8 +283,6 @@ const ScheduleScreen = () => {
           weeklyTriggerTime.setHours(weeklyTime.getHours());
           weeklyTriggerTime.setMinutes(weeklyTime.getMinutes());
           weeklyTriggerTime.setSeconds(0);
-  
-          // Tính số ngày đến lần kích hoạt tiếp theo trong tuần
           const daysUntilNextTrigger =
             (7 - now.getDay() + weeklyDay) % 7 || 7; // ||7 đảm bảo không đặt lại trong cùng ngày
           weeklyTriggerTime.setDate(now.getDate() + daysUntilNextTrigger);
@@ -280,7 +392,10 @@ const ScheduleScreen = () => {
         {daysUntilExam !== null && (
           <View style={styles.countdownContainer}>
             <Text style={styles.countdownLabel}>Time Until Exam</Text>
-            <Text style={styles.countdownNumber}>{daysUntilExam}</Text>
+            <Text style={styles.countdownNumber}>
+              {daysUntilExam !== null ? daysUntilExam : ''}
+            </Text>
+
             <Text style={styles.countdownUnit}>days</Text>
             <View style={styles.progressBar}>
               <View style={[styles.progress, { width: `${Math.min(100, (30 - daysUntilExam) / 30 * 100)}%` }]} />
@@ -302,7 +417,29 @@ const ScheduleScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Reminder Settings Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="score" size={24} color="#4A90E2" />
+            <Text style={styles.sectionTitle}>Set Target Score</Text>
+          </View>
+
+          <TextInput
+            style={styles.inputField}
+            value={targetScore}
+            onChangeText={setTargetScore}
+            keyboardType="numeric"
+            placeholder="Enter your target score"
+          />
+
+          <TouchableOpacity
+            style={styles.saveButton}
+            onPress={() => updateProfile(targetScore, examDate)}
+          >
+            <Text style={styles.saveButtonText}>Save Target Score</Text>
+          </TouchableOpacity>
+        </View>
+
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="notifications" size={24} color="#4A90E2" />
@@ -486,7 +623,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   section: {
-    marginBottom: 20,
+    marginVertical: 10,
+    paddingHorizontal: 15,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -495,8 +633,28 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    color: '#4A90E2',
+    fontWeight: 'bold',
     marginLeft: 10,
+  },
+  inputField: {
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  saveButton: {
+    backgroundColor: '#4A90E2',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   countdownContainer: {
     alignItems: 'center',

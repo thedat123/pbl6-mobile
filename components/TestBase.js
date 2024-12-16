@@ -20,14 +20,17 @@ import TestPart5 from '../screens/TestPart5';
 import TestPart6 from '../screens/TestPart6';
 import TestPart7 from '../screens/TestPart7';
 import { QuestionNavigation } from './QuestionTest';
+import { API_BASE_URL } from '@env';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
 const TestBase = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { selectedParts = [], timeLimit } = route.params || {};
-  const [currentPart, setCurrentPart] = useState(selectedParts[0] || 1);
+  const { selectedParts = [], timeLimit, testId } = route.params || {};
+  const [currentPart, setCurrentPart] = useState(selectedParts[0]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState({});
   const initialTimeLeft = timeLimit ? timeLimit * 60 : 0;
@@ -43,6 +46,14 @@ const TestBase = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [timeLimit]);
+
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []); 
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -67,50 +78,118 @@ const TestBase = () => {
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     Alert.alert(
-      "Nộp bài",
-      "Bạn có chắc chắn muốn nộp bài?",
+      "Submit Test",
+      "Are you sure you want to submit your test?",
       [
-        { text: "Hủy", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
-          text: "Nộp bài",
-          onPress: () => {
-            const allTestResults = selectedParts.map((partNumber) => {
-              const partRef = testPartRef.current[partNumber];
-              return {
-                partNumber,
-                answers: partRef?.getAnswers() || {},
-                questionStatus: partRef?.getQuestionStatus() || {},
-                duration: partRef?.getTestDuration() || 0,
-                questionData: partRef?.getQuestionData() || [],
+          text: "Submit",
+          onPress: async () => {
+            try {
+              const allTestResults = selectedParts.map((part) => {
+                const partRef = testPartRef.current[part];
+                return {
+                  partName: part,
+                  answers: partRef?.getAnswers() || {},
+                  questionStatus: partRef?.getQuestionStatus() || {},
+                  duration: partRef?.getTestDuration() || 0,
+                  questionData: partRef?.getQuestionData() || [],
+                };
+              });
+  
+              const mergedResults = {
+                answers: allTestResults.reduce((acc, part) => ({ ...acc, ...part.answers }), {}),
+                questionStatus: allTestResults.reduce((acc, part) => ({ ...acc, ...part.questionStatus }), {}),
+                duration: allTestResults.reduce((total, part) => total + part.duration, 0),
+                questionData: allTestResults.flatMap((part) => part.questionData),
               };
-            });
   
-            const mergedResults = {
-              answers: allTestResults.reduce((acc, part) => ({ ...acc, ...part.answers }), {}),
-              questionStatus: allTestResults.reduce((acc, part) => ({ ...acc, ...part.questionStatus }), {}),
-              duration: allTestResults.reduce((total, part) => total + part.duration, 0),
-              questionData: allTestResults.flatMap((part) => part.questionData),
-            };
+              const userAnswers = Object.keys(mergedResults.answers).map((questionId) => ({
+                idQuestion: questionId,
+                answer: mergedResults.answers[questionId],
+              }));
   
-            // Tính tổng số câu hỏi từ tất cả các phần
-            const totalQuestions = mergedResults.questionData.reduce((acc, part) => acc + part.length, 0);
+              const numCorrect = mergedResults.questionData.reduce((count, question) => {
+                const userAnswer = mergedResults.answers[question.id];
+                return userAnswer === question.correctAnswer ? count + 1 : count;
+              }, 0);
   
-            // Gửi thông tin kết quả và tổng số câu hỏi đến ResultTestPageScreen
-            navigation.navigate('ResultTestPageScreen', {
-              testResults: mergedResults,
-              totalQuestions, // Thêm tổng số câu hỏi
-            });
+              const userId = await AsyncStorage.getItem("userId");
+              if (!userId) {
+                throw new Error("Authentication userId not found. Please log in again.");
+              }
+  
+              const dataToSend = {
+                userId,
+                testId,
+                time: mergedResults.duration,
+                userAnswer: userAnswers,
+                isFullTest: true,
+              };
+  
+              const token = await AsyncStorage.getItem("token");
+              if (!token) {
+                throw new Error("Authentication token not found. Please log in again.");
+              }
+  
+              const response = await axios.post(`${API_BASE_URL}:3001/api/v1/test-practice`, dataToSend, {
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+              });
+  
+              console.log(response);
+              if (response.status === 201) {
+                const testPracticeId = response.data.id;
+  
+                const testPracticeResponse = await axios.get(`${API_BASE_URL}:3001/api/v1/test-practice/${testPracticeId}`, {
+                  headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                });
+  
+                if (testPracticeResponse.status === 200 && testPracticeResponse.data) {
+                  const testPractice = testPracticeResponse.data.testPractice;
+                  navigation.navigate("TestDetailResult", {
+                    result: {
+                      ...mergedResults,
+                      numCorrect: testPractice.numCorrect,
+                      totalQuestion: testPractice.totalQuestion,
+                      LCScore: testPractice.LCScore,
+                      RCScore: testPractice.RCScore,
+                      testPracticeId: testPractice.id,
+                      user: testPractice.user,
+                      test: {
+                        ...testPractice.test,
+                        selectedParts, // Add selected parts here
+                      },
+                      userAnswers: testPractice.userAnswers,
+                      time: mergedResults.duration,
+                    },
+                  });                  
+                } else {
+                  throw new Error("Failed to fetch detailed test practice data.");
+                }
+              } else {
+                throw new Error("Failed to submit test practice or invalid response format.");
+              }
+            } catch (error) {
+              console.error("Error:", error);
+              Alert.alert("Error", error.message || "An unknown error occurred.");
+            }
           },
         },
       ]
     );
-  };        
-
+  };  
+  
   const renderPartNav = () => {
-    if (selectedParts.length <= 1) return null;
-
+    if (selectedParts.length < 1) return null;
+  
     return (
       <View style={styles.navContainer}>
         <TouchableOpacity
@@ -118,7 +197,7 @@ const TestBase = () => {
           onPress={() => setIsNavExpanded(!isNavExpanded)}
         >
           <Text style={styles.navToggleText}>
-            Part {currentPart}
+            {currentPart}
           </Text>
           <Ionicons
             name={isNavExpanded ? "chevron-up" : "chevron-down"}
@@ -126,22 +205,22 @@ const TestBase = () => {
             color="#2196F3"
           />
         </TouchableOpacity>
-
+  
         {isNavExpanded && (
           <View style={styles.partNavExpanded}>
-            {selectedParts.map((partNumber) => (
+            {selectedParts.map((partName) => (
               <TouchableOpacity
-                key={partNumber}
-                style={[styles.partTab, currentPart === partNumber && styles.partTabActive]}
+                key={partName}
+                style={[styles.partTab, currentPart === partName && styles.partTabActive]}
                 onPress={() => {
-                  setCurrentPart(partNumber);
-                  setIsNavExpanded(false);
+                  setCurrentPart(partName);  
+                  setIsNavExpanded(false); 
                 }}
               >
-                <Text style={[styles.partTabText, currentPart === partNumber && styles.partTabTextActive]}>
-                  Part {partNumber}
+                <Text style={[styles.partTabText, currentPart === partName && styles.partTabTextActive]}>
+                  {partName}
                 </Text>
-                {currentPart === partNumber && (
+                {currentPart === partName && (
                   <Ionicons name="checkmark-circle" size={20} color="#fff" />
                 )}
               </TouchableOpacity>
@@ -155,22 +234,32 @@ const TestBase = () => {
   const getAllQuestions = () => {
     const allQuestions = selectedParts.flatMap(part => {
       const partData = testPartRef.current[part]?.getQuestionData() || [];
+
       return partData.flatMap(p => p.questions || []);
     }).filter(Boolean);
     return allQuestions;
   };
 
   const renderCurrentPart = () => {
-    switch (currentPart) {
-      case 1: return <TestPart1 ref={(ref) => (testPartRef.current[1] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
-      case 2: return <TestPart2 ref={(ref) => (testPartRef.current[2] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
-      case 3: return <TestPart3 ref={(ref) => (testPartRef.current[3] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
-      case 4: return <TestPart4 ref={(ref) => (testPartRef.current[4] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
-      case 5: return <TestPart5 ref={(ref) => (testPartRef.current[5] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
-      case 6: return <TestPart6 ref={(ref) => (testPartRef.current[6] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
-      case 7: return <TestPart7 ref={(ref) => (testPartRef.current[7] = ref)} onQuestionStatusChange={handlePartQuestionStatus}/>;
-      default: return <TestPart1 onQuestionStatusChange={handlePartQuestionStatus}/>;
-    }
+    const partComponentMap = {
+      'Part 1': TestPart1,
+      'Part 2': TestPart2,
+      'Part 3': TestPart3,
+      'Part 4': TestPart4,
+      'Part 5': TestPart5,
+      'Part 6': TestPart6,
+      'Part 7': TestPart7,
+    };
+  
+    const PartComponent = partComponentMap[currentPart] || TestPart1;
+  
+    return (
+      <PartComponent
+        ref={(ref) => (testPartRef.current[currentPart] = ref)}
+        onQuestionStatusChange={handlePartQuestionStatus}
+        testId={testId}
+      />
+    );
   };
 
   return (
@@ -179,10 +268,7 @@ const TestBase = () => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>
-            {selectedParts.length > 1 
-              ? `PART ${selectedParts.join(', ')}` // Hiển thị tất cả các part đã chọn
-              : `PART ${currentPart}`
-            }
+            Test Practice
           </Text>
           <View style={styles.timerContainer}>
             <Ionicons name="time-outline" size={20} color="#2196F3" />

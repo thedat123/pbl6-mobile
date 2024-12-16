@@ -91,6 +91,9 @@ const VocabResultScreen = ({ route }) => {
     );
   };
 
+  const bestScore = useMemo(() => Math.max(...history, 0), [history]); // Best score from history
+  const chartData = [0, bestScore, correctAnswers]; // Start at 0, then best score and current score
+
   const renderProgressStats = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statItem}>
@@ -109,10 +112,7 @@ const VocabResultScreen = ({ route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Kết quả kiểm tra</Text>
           <Text style={styles.subtitle}>Chủ đề: {topicName}</Text>
@@ -139,10 +139,8 @@ const VocabResultScreen = ({ route }) => {
           <Text style={styles.chartTitle}>Tiến độ học tập</Text>
           <LineChart
             data={{
-              labels: history.map((_, index) => `Lần ${index + 1}`),
-              datasets: [{
-                data: history.length > 0 ? history : [0], // Show default if no history
-              }],
+              labels: ['0', 'Kết quả tốt nhất', 'Kết quả hiện tại'], // Chart starts at 0
+              datasets: [{ data: chartData }],
             }}
             width={width - 60}
             height={180}

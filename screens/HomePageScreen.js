@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import Pagination from '../components/Pagination';
 import { useNavigation } from '@react-navigation/native';
+import { API_BASE_URL } from '@env';
 
 const practiceResults = [
     { id: '1', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 },
@@ -29,6 +30,9 @@ const ITEMS_PER_PAGE = 4;
 const HomePageScreen = () => {
     const { width, height } = useWindowDimensions();
     const [username, setUsername] = useState('');
+    const [targetScore, setTargetScore] = useState(0);
+    const [testDate, setTestDate] = useState('');
+    const [daysUntilExam, setDaysUntilExam] = useState(null);
     const [vocabGroups, setVocabGroups] = useState([]);  // State for vocab groups
     const [isLoading, setLoading] = useState(false);
     const [showAllVocabGroups, setShowAllVocabGroups] = useState(false);
@@ -78,11 +82,23 @@ const HomePageScreen = () => {
         }
     };
 
+    useEffect(() => {
+        if (!API_BASE_URL) {
+            console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+            setError('Configuration Error: Unable to connect to server');
+            return;
+        }
+    }, []); 
+
+    useEffect(() => {
+        fetchInitialData();
+    }, [targetScore]); 
+
     const fetchUsernameFromToken = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
             if (token) {
-                const response = await fetch('http://10.0.2.2:3000/api/v1/auth/me', {
+                const response = await fetch(`${API_BASE_URL}:3001/api/v1/auth/me`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -96,6 +112,10 @@ const HomePageScreen = () => {
 
                 const data = await response.json();
                 setUsername(data.name || 'User');
+                setTargetScore(data.targetScore || 0);
+                setTestDate(data.testDate?.split('T')[0] || '');
+                const savedDays = await AsyncStorage.getItem('daysUntilExam');
+                setDaysUntilExam(JSON.parse(savedDays));
             }
         } catch (error) {
             console.error('Error fetching username from API:', error);
@@ -104,15 +124,15 @@ const HomePageScreen = () => {
 
     const fetchVocabGroups = async () => {
         try {
-            const response = await fetch('http://10.0.2.2:3000/api/v1/group-topic/');
+            const response = await fetch(`${API_BASE_URL}:3001/api/v1/group-topic/`);
             if (!response.ok) throw new Error('Failed to fetch vocab groups');
             const data = await response.json();
 
-            // Ensure all groups have `__topics__` and `topicsCount`
+            // Ensure all groups have `topics` and `topicsCount`
             const processedData = data.map(group => ({
                 ...group,
-                __topics__: group.__topics__ || [],
-                topicsCount: group.__topics__ ? group.__topics__.length : 0,
+                topics: group.topics || [],
+                topicsCount: group.topics ? group.topics.length : 0,
             }));
 
             setVocabGroups(processedData); // Set the vocab groups state
@@ -227,15 +247,15 @@ const HomePageScreen = () => {
                             <View style={[styles.headerInfo, { flexDirection: isLandscape ? 'row' : 'row' }]}>
                                 <View style={[styles.infoCard, { padding: width * 0.03 }]}>
                                     <Text style={[styles.headerSubtext, { fontSize: width * 0.03 }]}>Days Until Exam</Text>
-                                    <Text style={[styles.boldText, { fontSize: width * 0.04 }]}>111</Text>
+                                    <Text style={[styles.boldText, { fontSize: width * 0.04 }]}>{daysUntilExam}</Text>
                                 </View>
                                 <View style={[styles.infoCard, { padding: width * 0.03 }]}>
                                     <Text style={[styles.headerSubtext, { fontSize: width * 0.03 }]}>Exam Date</Text>
-                                    <Text style={[styles.boldText, { fontSize: width * 0.04 }]}>30/12/2024</Text>
+                                    <Text style={[styles.boldText, { fontSize: width * 0.04 }]}>{testDate}</Text>
                                 </View>
                                 <View style={[styles.infoCard, { padding: width * 0.03 }]}>
                                     <Text style={[styles.headerSubtext, { fontSize: width * 0.03 }]}>Target Score</Text>
-                                    <Text style={[styles.boldText, { fontSize: width * 0.04 }]}>700</Text>
+                                    <Text style={[styles.boldText, { fontSize: width * 0.04 }]}>{targetScore}</Text>
                                 </View>
                             </View>
                         </SafeAreaView>

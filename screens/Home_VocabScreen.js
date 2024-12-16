@@ -21,6 +21,7 @@ import colors from "../constants/colors";
 import Pagination from "../components/Pagination";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from 'expo-linear-gradient';
+import { API_BASE_URL } from '@env';
 
 const { width, height } = Dimensions.get('window');
 
@@ -66,6 +67,14 @@ const HomeVocabScreen = () => {
     animate();
     fetchInitialData();
   }, []);
+
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []);  
   
   const fetchInitialData = async () => {
     setLoading(true); 
@@ -83,7 +92,7 @@ const HomeVocabScreen = () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (token) {
-        const response = await fetch('http://10.0.2.2:3000/api/v1/auth/me', {
+        const response = await fetch(`${API_BASE_URL}:3001/api/v1/auth/me`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -102,16 +111,15 @@ const HomeVocabScreen = () => {
 
   const fetchVocabGroups = async () => {
     try {
-        const response = await fetch('http://10.0.2.2:3000/api/v1/group-topic/');
+        const response = await fetch(`${API_BASE_URL}:3001/api/v1/group-topic/`);
         if (!response.ok) throw new Error('Failed to fetch vocab groups');
         
         const data = await response.json();
 
-        // Ensure all groups have `__topics__` and `topicsCount`
         const processedData = data.map(group => ({
             ...group,
-            __topics__: group.__topics__ || [],
-            topicsCount: group.__topics__ ? group.__topics__.length : 0,
+            topics: group.topics || [],
+            topicsCount: group.topics ? group.topics.length : 0,
         }));
 
         setVocabGroups(processedData);

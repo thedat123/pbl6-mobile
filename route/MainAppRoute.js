@@ -23,6 +23,8 @@ import ResultTestPageScreen from '../screens/ResultTestPageScreen';
 import ResultStatisticScreen from '../screens/ResultStatisticScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import TestScreen from '../screens/TestScreen';
+import SignInForm from '../components/SignInForm';
+import TestDetailResult from '../screens/TestDetailResult';
 
 
 const Stack = createStackNavigator(); // Create Stack Navigator
@@ -206,6 +208,21 @@ const MainAppRoute = () => {
           ),
         }} 
       />
+      <Stack.Screen 
+        name="SignInForm"
+        component={SignInForm}
+      />
+      <Stack.Screen 
+        name="TestDetailResult"
+        component={TestDetailResult}
+        options={{ 
+          title: "Test Result Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      
       
     </Stack.Navigator>
   );

@@ -1,16 +1,62 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import axios from 'axios';
+import { API_BASE_URL } from '@env';
 
 const FullMode = () => {
   const navigation = useNavigation();
+  const route = useRoute();
+  const { id } = route.params;
+
+  const [parts, setParts] = useState([]);
+
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []); 
+
+  useEffect(() => {
+    const fetchParts = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}:3001/api/v1/test/${id}`);
+        if (response.data) {
+          const testData = response.data;
+
+          const availableParts = testData.groupQuestions.reduce((acc, group) => {
+            if (group.part?.key && !acc.some(part => part.key === group.part.key)) {
+              acc.push({
+                key: group.part.key,
+                name: `Part ${group.part.key.replace('part', '')}`,
+              });
+            }
+            return acc;
+          }, []);
+
+          const sortedParts = availableParts.map(part => part.name);
+          setParts(sortedParts);
+        } else {
+          throw new Error('No data found for this test');
+        }
+      } catch (error) {
+        console.error('Error fetching parts:', error.message);
+      }
+    };
+
+    fetchParts();
+  }, [id]);
 
   const handleStart = () => {
-    const allParts = [1, 2, 3, 4, 5, 6, 7];
-    navigation.navigate('TestBase', {
-      selectedParts: allParts,
-      timeLimit: 120 
-    });
+    if (parts.length > 0) {
+      navigation.navigate('TestBase', {
+        selectedParts: parts,
+        timeLimit: 120,
+        testId: id,
+      });
+    }
   };
 
   const renderTip = () => (
@@ -29,12 +75,17 @@ const FullMode = () => {
       <ScrollView style={styles.content}>
         {renderTip()}
       </ScrollView>
-      <TouchableOpacity style={styles.startButton} onPress={handleStart}>
+      <TouchableOpacity
+        style={[styles.startButton, parts.length === 0 && styles.startButtonDisabled]}
+        disabled={parts.length === 0}
+        onPress={handleStart}
+      >
         <Text style={styles.startButtonText}>START TEST</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

@@ -1,51 +1,38 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const TestSubjectHeader = ({ activeTab, onTabChange }) => {
-  const tabs = [
-    { 
-      id: 'info',
-      label: 'Test Information',
-      icon: 'information-circle-outline'
-    },
-    { 
-      id: 'answers',
-      label: 'Answers/Transcript',
-      icon: 'document-text-outline'
+const TestSubjectHeader = ({ activeTab, onTabChange, test }) => {
+  const [active, setActive] = useState(activeTab || 'info');
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== active) {
+      setActive(activeTab);
     }
+  }, [activeTab]);
+
+  const tabs = [
+    { id: 'info', label: 'Test Information', icon: 'information-circle-outline' },
+    { id: 'answers', label: 'Answers/Transcript', icon: 'document-text-outline' },
   ];
 
   const testInfo = {
-    duration: '120 minutes',
+    duration: `${test.time || 0} minutes`,
     sections: '7 sections',
-    questions: '200 questions',
-    comments: '143 comments',
-    participants: '227,127 participants'
+    questions: `${test.groupQuestions?.reduce((total, group) => total + (group.questions?.length || 0), 0) || 200} questions`,
+    comments: `${test.comments || 0} comments`,
+    participants: `${test.participants || 0} participants`,
   };
 
-  const renderTestInfo = () => (
-    <View style={styles.infoContainer}>
-      <View style={styles.statsRow}>
-        <Ionicons name="time-outline" size={20} color="#4B5563" />
-        <Text style={styles.statsText}>{testInfo.duration}</Text>
-        <View style={styles.statsDiv} />
-        <Ionicons name="layers-outline" size={20} color="#4B5563" />
-        <Text style={styles.statsText}>{testInfo.sections}</Text>
-        <View style={styles.statsDiv} />
-        <Ionicons name="help-circle-outline" size={20} color="#4B5563" />
-        <Text style={styles.statsText}>{testInfo.questions}</Text>
-      </View>
-      
-      <View style={styles.statsRow}>
-        <Ionicons name="chatbubble-outline" size={18} color="#4B5563" />
-        <Text style={styles.statsText}>{testInfo.comments}</Text>
-        <View style={styles.statsDiv} />
-        <Ionicons name="people-outline" size={20} color="#4B5563" />
-        <Text style={styles.statsText}>{testInfo.participants}</Text>
-      </View>
-    </View>
-  );
+  const handleTabChange = (tabId) => {
+    setActive(tabId);
+    if (tabId === 'info') {
+      onTabChange('Practice');  
+    } else {
+      onTabChange(tabId);  
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -54,11 +41,45 @@ const TestSubjectHeader = ({ activeTab, onTabChange }) => {
           <View style={styles.tagContainer}>
             <Text style={styles.tagText}>#TOEIC</Text>
             <View style={styles.levelTag}>
-              <Text style={styles.levelText}>Test 10</Text>
+              <Text style={styles.levelText}>{test.name}</Text>
             </View>
           </View>
-          <Text style={styles.title}>New Economy TOEIC</Text>
-          {renderTestInfo()}
+
+          {/* "View More" functionality */}
+          {isExpanded && (
+            <>
+              <Text style={styles.title}>{test.name}</Text>
+              <View style={styles.infoContainer}>
+                <View style={styles.statsRow}>
+                  <Ionicons name="time-outline" size={20} color="#4B5563" />
+                  <Text style={styles.statsText}>{testInfo.duration}</Text>
+                  <View style={styles.statsDiv} />
+                  <Ionicons name="layers-outline" size={20} color="#4B5563" />
+                  <Text style={styles.statsText}>{testInfo.sections}</Text>
+                  <View style={styles.statsDiv} />
+                  <Ionicons name="help-circle-outline" size={20} color="#4B5563" />
+                  <Text style={styles.statsText}>{testInfo.questions}</Text>
+                </View>
+
+                <View style={styles.statsRow}>
+                  <Ionicons name="chatbubble-outline" size={18} color="#4B5563" />
+                  <Text style={styles.statsText}>{testInfo.comments}</Text>
+                  <View style={styles.statsDiv} />
+                  <Ionicons name="people-outline" size={20} color="#4B5563" />
+                  <Text style={styles.statsText}>{testInfo.participants}</Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          <TouchableOpacity
+            onPress={() => setIsExpanded(!isExpanded)}
+            style={styles.viewMoreButton}
+          >
+            <Text style={styles.viewMoreText}>
+              {isExpanded ? 'View Less' : 'View More'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -66,22 +87,16 @@ const TestSubjectHeader = ({ activeTab, onTabChange }) => {
         {tabs.map((tab) => (
           <TouchableOpacity
             key={tab.id}
-            style={[
-              styles.tab,
-              activeTab === tab.id && styles.activeTab
-            ]}
-            onPress={() => onTabChange(tab.id)}
+            style={[styles.tab, active === tab.id && styles.activeTab]}
+            onPress={() => handleTabChange(tab.id)}
           >
-            <Ionicons 
-              name={tab.icon} 
-              size={20} 
-              color={activeTab === tab.id ? '#2563EB' : '#6B7280'} 
+            <Ionicons
+              name={tab.icon}
+              size={20}
+              color={active === tab.id ? '#2563EB' : '#6B7280'}
               style={styles.tabIcon}
             />
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.id && styles.activeTabText
-            ]}>
+            <Text style={[styles.tabText, active === tab.id && styles.activeTabText]}>
               {tab.label}
             </Text>
           </TouchableOpacity>
@@ -101,12 +116,13 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   titleSection: {
-    gap: 8,
+    alignItems: 'center', // Center-align content
   },
   tagContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    justifyContent: 'center', // Center-align tags
   },
   tagText: {
     fontSize: 14,
@@ -133,6 +149,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
     marginTop: 4,
+    textAlign: 'center',
   },
   infoContainer: {
     marginTop: 12,
@@ -142,6 +159,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    justifyContent: 'center',
   },
   statsText: {
     fontSize: 14,
@@ -154,6 +172,20 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#D1D5DB',
     marginHorizontal: 4,
+  },
+  viewMoreButton: {
+    marginTop: 16,
+    alignSelf: 'center', // Center-align the button
+    backgroundColor: '#2563EB',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    elevation: 3, // Add slight shadow for depth
+  },
+  viewMoreText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   tabContainer: {
     flexDirection: 'row',
