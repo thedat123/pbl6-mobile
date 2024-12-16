@@ -10,7 +10,6 @@ const MultipleChoiceVocab = ({
 }) => {
   const [isCorrect, setIsCorrect] = useState(null);
 
-  // Defensive checks with early return
   if (!questionData) {
     console.error('MultipleChoiceVocab: No question data');
     return <View><Text>No question available</Text></View>;
@@ -87,15 +86,15 @@ const styles = StyleSheet.create({
   },
   correctOption: {
     borderColor: '#4CAF50',
-    backgroundColor: '#e8f5e9', // Màu xanh nhạt cho đáp án đúng
+    backgroundColor: '#e8f5e9', 
   },
   wrongOption: {
     borderColor: '#f44336',
-    backgroundColor: '#ffebee', // Màu đỏ nhạt cho đáp án sai
+    backgroundColor: '#ffebee',
   },
   selectedCorrectOption: {
     borderColor: '#4CAF50',
-    backgroundColor: '#a5d6a7',  // Màu xanh nhạt hơn cho đáp án đúng được chọn
+    backgroundColor: '#a5d6a7',
   },
 });
 

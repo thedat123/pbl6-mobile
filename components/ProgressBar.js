@@ -9,9 +9,9 @@ const ProgressBar = ({ progress }) => {
     <View style={styles.progressContainer}>
       <Progress.Bar
         progress={progress}
-        width={width * 0.6}
+        width={width * 0.75}
         height={12}
-        color="#00796b"
+        color="#2C3E82"
         borderRadius={5}
       />
     </View>

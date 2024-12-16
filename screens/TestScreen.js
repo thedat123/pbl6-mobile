@@ -1,458 +1,333 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   TextInput,
   SafeAreaView,
   Platform,
   StatusBar,
-  Animated,
+  ActivityIndicator,
 } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-
-const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
-
-const FilterButton = ({ title, isActive, onPress, icon }) => {
-  const scale = useState(new Animated.Value(1))[0];
-
-  const handlePressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  return (
-    <AnimatedTouchableOpacity
-      style={[styles.filterButton, isActive && styles.filterButtonActive, { transform: [{ scale }] }]}
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
-      <FontAwesome name={icon} size={18} color={isActive ? '#fff' : '#666'} style={styles.filterIcon} />
-      <Text style={[styles.filterButtonText, isActive && styles.filterButtonTextActive]}>
-        {title}
-      </Text>
-    </AnimatedTouchableOpacity>
-  );
-};
-
-const TestCard = ({ title, testsCount, progress = 0, onPress }) => {
-  const scale = useState(new Animated.Value(1))[0];
-
-  const handlePressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.98,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  return (
-    <AnimatedTouchableOpacity style={[styles.testCard, { transform: [{ scale }] }]} onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-      <View style={styles.testInfo}>
-        <View style={styles.testIconContainer}>
-          <FontAwesome name="file-text-o" size={20} color="#007AFF" />
-        </View>
-        <Text style={styles.testTitle} numberOfLines={2}>
-          {title}
-        </Text>
-      </View>
-      <View style={styles.testStats}>
-        <View style={styles.statsContainer}>
-          <FontAwesome name="clock-o" size={14} color="#666" style={styles.statsIcon} />
-          <Text style={styles.testCount}>{testsCount} tests</Text>
-          <View style={styles.testDuration}>
-            <FontAwesome name="hourglass-half" size={12} color="#666" />
-            <Text style={styles.durationText}>120 min</Text>
-          </View>
-        </View>
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
-          </View>
-          <Text style={styles.percentage}>{progress}%</Text>
-        </View>
-      </View>
-    </AnimatedTouchableOpacity>
-  );
-};
-
-const TestSection = ({ title, imageSource, onTestPress, filter }) => (
-  <View style={styles.sectionContainer}>
-    <View style={styles.sectionHeader}>
-      <Image source={imageSource} style={styles.sectionImage} />
-      <View style={styles.sectionTitleContainer}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.sectionSubtitle}>6 practice tests available</Text>
-      </View>
-      <TouchableOpacity style={styles.seeAllButton}>
-        <Text style={styles.seeAllText}>See all</Text>
-        <FontAwesome name="angle-right" size={16} color="#007AFF" />
-      </TouchableOpacity>
-    </View>
-    <View style={styles.testGrid}>
-      {[1, 2, 3, 4, 5, 6].map((num) => {
-        // Filter logic based on activeFilter
-        if (filter && !title.toLowerCase().includes(filter.toLowerCase())) {
-          return null;
-        }
-        return (
-          <TestCard
-            key={num}
-            title={`2024 Practice Set TOEIC Test ${num}`}
-            testsCount={3}
-            progress={num * 10}
-            onPress={() => onTestPress(num)}
-          />
-        );
-      })}
-    </View>
-  </View>
-);
+import axios from 'axios';
+import { API_BASE_URL } from '@env';
 
 const TestScreen = () => {
-  const [activeFilter, setActiveFilter] = useState('All Skills');
+  const [tests, setTests] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const navigation = useNavigation();
 
-  const handleTestPress = useCallback(() => {
-    navigation.navigate('TestSubject');
-  }, []);
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []);   
 
-  // Define test sections with categories (Listening, Reading, etc.)
-  const testSections = [
-    { title: '2024 Practice Set 1', category: 'Listening' },
-    { title: '2024 Practice Set 2', category: 'Reading' },
-    { title: '2024 Practice Set 3', category: 'Listening' },
-    { title: '2024 Practice Set 4', category: 'Reading' },
-    { title: '2024 Practice Set 5', category: 'Listening' },
-    { title: '2024 Practice Set 6', category: 'Reading' },
-  ];
+  const fetchTests = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE_URL}:3001/api/v1/test`, {
+        params: {
+          search: searchText || '',
+        }
+      });
 
-  // Combine the search text and active filter to filter sections
-  const filteredSections = testSections.filter((section) => {
+      const sortedTests = response.data?.data?.sort((a, b) => 
+        new Date(b.createdAt) - new Date(a.createdAt)
+      ) || [];
+      
+      setTests(sortedTests);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchText]);
+
+  useEffect(() => {
+    fetchTests();
+  }, [fetchTests]);
+
+  const handleTestPress = (test) => {
+    console.log(test);
+    console.log("============================");
+    navigation.navigate('TestSubject', { id: test.id, test });
+  };   
+
+  const renderTestItem = (test) => {
+    const totalQuestions = test.groupQuestions?.reduce((total, group) => 
+      total + (group.questions?.length || 0), 0) || 0;
+    
+    const getDifficultyLabel = () => {
+      if (totalQuestions <= 20) return 'Mini Test';
+      if (totalQuestions <= 50) return 'Standard Test';
+      return 'Comprehensive Test';
+    };
+
     return (
-      section.title.toLowerCase().includes(searchText.toLowerCase()) &&
-      (activeFilter === 'All Skills' || section.category === activeFilter)
+      <TouchableOpacity 
+        key={test.id}
+        style={styles.testCard} 
+        onPress={() => handleTestPress(test)}
+      >
+        <View style={styles.testCardHeader}>
+          <View style={styles.testIconContainer}>
+            <Feather name="book-open" size={24} color="#007AFF" />
+          </View>
+          <View style={styles.testDetails}>
+            <Text style={styles.testTitle} numberOfLines={2}>
+              {test.name}
+            </Text>
+            <View style={styles.testMetadata}>
+              <View style={styles.metadataChip}>
+                <Feather name="clock" size={14} color="#666" />
+                <Text style={styles.metadataText}>{test.time} mins</Text>
+              </View>
+              <View style={styles.metadataChip}>
+                <Feather name="list" size={14} color="#666" />
+                <Text style={styles.metadataText}>{totalQuestions} Questions</Text>
+              </View>
+              <View style={styles.metadataChip}>
+                <Feather name="zap" size={14} color="#666" />
+                <Text style={styles.metadataText}>{getDifficultyLabel()}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        <View style={styles.testCardFooter}>
+          <Text style={styles.testDate}>
+            Added: {new Date(test.createdAt).toLocaleDateString()}
+          </Text>
+          <TouchableOpacity style={styles.startButton}>
+            <Text style={styles.startButtonText}>Start Test</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     );
-  });
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading TOEIC Tests...</Text>
+        </View>
+      );
+    }
+
+    const filteredTests = tests.filter(test => 
+      test.name.toLowerCase().includes(searchText.toLowerCase())
+    );
+
+    if (filteredTests.length === 0) {
+      return (
+        <View style={styles.centerContent}>
+          <Feather name="frown" size={50} color="#666" />
+          <Text style={styles.emptyStateTitle}>No Tests Found</Text>
+          <Text style={styles.emptyStateSubtitle}>Try a different search term</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView 
+        contentContainerStyle={styles.testList}
+        showsVerticalScrollIndicator={false}
+      >
+        {filteredTests.map(renderTestItem)}
+      </ScrollView>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+      
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>TOEIC EXAM LIBRARY</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.headerButton}>
-            <FontAwesome name="bell-o" size={22} color="#007AFF" />
+        <Text style={styles.headerTitle}>TOEIC Exam Library</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerIcon}>
+            <Feather name="bell" size={22} color="#007AFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
-            <FontAwesome name="info-circle" size={22} color="#007AFF" />
+          <TouchableOpacity style={styles.headerIcon}>
+            <Feather name="info" size={22} color="#007AFF" />
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.filterContainer}>
-        <View style={styles.searchContainer}>
-          <FontAwesome name="search" size={18} color="#666" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search for tests..."
-            placeholderTextColor="#999"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          {searchText.length > 0 && (
-            <TouchableOpacity style={styles.clearButton} onPress={() => setSearchText('')}>
-              <FontAwesome name="times-circle" size={16} color="#999" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.filterButtons}>
-          <FilterButton
-            title="All Skills"
-            icon="bars"
-            isActive={activeFilter === 'All Skills'}
-            onPress={() => setActiveFilter('All Skills')}
-          />
-          <FilterButton
-            title="Listening"
-            icon="headphones"
-            isActive={activeFilter === 'Listening'}
-            onPress={() => setActiveFilter('Listening')}
-          />
-          <FilterButton
-            title="Reading"
-            icon="book"
-            isActive={activeFilter === 'Reading'}
-            onPress={() => setActiveFilter('Reading')}
-          />
-        </View>
+      <View style={styles.searchContainer}>
+        <Feather name="search" size={20} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search practice tests..."
+          placeholderTextColor="#999"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchText('')}>
+            <Feather name="x-circle" size={20} color="#999" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {filteredSections.map((section, index) => (
-          <TestSection
-            key={index}
-            title={section.title}
-            imageSource={{ uri: 'http://192.168.100.101:8081/assets/images/Test/toeic_test_home.png' }}
-            filter={searchText} 
-            onTestPress={handleTestPress}
-          />
-        ))}
-      </ScrollView>
+      {renderContent()}
     </SafeAreaView>
   );
 };
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F7FA',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#E6E6E6',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#1A1A1A',
+    color: '#333',
   },
-  headerButtons: {
+  headerActions: {
     flexDirection: 'row',
-    alignItems: 'center',
   },
-  headerButton: {
-    padding: 8,
-    marginLeft: 12,
-  },
-  filterContainer: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+  headerIcon: {
+    marginLeft: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    marginBottom: 16,
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E6E6E6',
+  },
+  searchIcon: {
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    fontSize: 15,
+    fontSize: 16,
     color: '#333',
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  clearButton: {
-    padding: 4,
-  },
-  filterButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  filterButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 24,
-    backgroundColor: '#F0F0F0',
-    flex: 1,
-    marginHorizontal: 4,
-    justifyContent: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  filterButtonText: {
-    color: '#666',
-    fontSize: 15,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  filterButtonTextActive: {
-    color: '#fff',
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
+  testList: {
     paddingVertical: 16,
   },
-  sectionContainer: {
+  testCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
     marginHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: '#fff',
-    borderRadius: 20,
     padding: 16,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 4,
+        elevation: 3,
       },
     }),
   },
-  sectionHeader: {
+  testCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  sectionImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    marginRight: 12,
-  },
-  sectionTitleContainer: {
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  seeAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-  },
-  seeAllText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
-    marginRight: 4,
-  },
-  testGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -8,
-  },
-  testCard: {
-    width: '50%',
-    padding: 8,
-  },
-  testInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 16,
-    padding: 12,
+    marginBottom: 12,
   },
   testIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#E8F1FF',
-    alignItems: 'center',
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: '#E6F2FF',
     justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
-  testTitle: {
+  testDetails: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    lineHeight: 20,
   },
-  testStats: {
-    marginTop: 10,
-    paddingHorizontal: 4,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  testTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
     marginBottom: 8,
   },
-  statsIcon: {
-    marginRight: 6,
-  },
-  testCount: {
-    fontSize: 13,
-    color: '#666',
-    fontWeight: '500',
-  },
-  testDuration: {
+  testMetadata: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 12,
-    paddingLeft: 12,
-    borderLeftWidth: 1,
-    borderLeftColor: '#E0E0E0',
   },
-  durationText: {
-    fontSize: 13,
+  metadataChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+  metadataText: {
+    fontSize: 12,
     color: '#666',
     marginLeft: 4,
-    fontWeight: '500',
   },
-  progressContainer: {
+  testCardFooter: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  testDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  startButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  startButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  progressBar: {
-    flex: 1,
-    height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-    marginRight: 8,
-    overflow: 'hidden',
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#007AFF',
-    borderRadius: 2,
-  },
-  percentage: {
-    fontSize: 13,
-    color: '#007AFF',
+  emptyStateTitle: {
+    fontSize: 20,
     fontWeight: '600',
-    minWidth: 32,
+    color: '#666',
+    marginTop: 16,
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
   },
 });
 

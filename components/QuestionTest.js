@@ -54,7 +54,7 @@ export const QuestionNavigation = ({
                 questionStatus[question.id] === 'answered' && styles.answeredBtnText,
               ]}
             >
-              {question.id}
+              {question.questionNumber}
             </Text>
           </TouchableOpacity>
         ))}

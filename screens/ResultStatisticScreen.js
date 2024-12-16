@@ -1,346 +1,318 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { API_BASE_URL } from '@env';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ResultStatisticScreen = () => {
+  const [statData, setStatData] = useState(null);
+  const [selectedTab, setSelectedTab] = useState('listening');
   const [selectedTime, setSelectedTime] = useState('30');
 
-  const Icons = {
-    Book: () => (
-      <View style={styles.icon}>
-        <Text style={styles.iconText}>📚</Text>
-      </View>
-    ),
-    Clock: () => (
-      <View style={styles.icon}>
-        <Text style={styles.iconText}>⏰</Text>
-      </View>
-    ),
-    Calendar: () => (
-      <View style={styles.icon}>
-        <Text style={styles.iconText}>📅</Text>
-      </View>
-    ),
-    Timer: () => (
-      <View style={styles.icon}>
-        <Text style={styles.iconText}>⌛</Text>
-      </View>
-    ),
-    Target: () => (
-      <View style={styles.icon}>
-        <Text style={styles.iconText}>🎯</Text>
-      </View>
-    ),
+  const fetchStatistics = async (day) => {
+      const token = await AsyncStorage.getItem('token');
+      try {
+          const response = await fetch(`${API_BASE_URL}:3001/api/v1/test-practice/user?day=${day}`, {
+              method: 'GET',
+              headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+              },
+          });
+          const data = await response.json();
+          setStatData(data);
+      } catch (error) {
+          console.error('Error fetching data:', error);
+      }
   };
 
-  const statItems = [
-    { icon: <Icons.Book />, label: 'Tests Completed', value: '1', unit: 'test(s)' },
-    { icon: <Icons.Clock />, label: 'Study Time', value: '0', unit: 'minutes' },
-    { icon: <Icons.Calendar />, label: 'Exam Date', value: '13/11/2024', unit: '' },
-    { icon: <Icons.Timer />, label: 'Days to Exam', value: '6', unit: 'days' },
-    { icon: <Icons.Target />, label: 'Target Score', value: '800.0', unit: '' },
-  ];
+  useEffect(() => {
+      fetchStatistics(selectedTime);
+  }, [selectedTime]);
 
-  const testHistory = [
-    {
-      date: '02/11/2024',
-      name: 'New Economy TOEIC Test 10',
-      tags: ['Full Test'],
-      score: '0/200',
-      time: '0:00:06',
-    },
-    {
-      date: '02/11/2024',
-      name: 'New Economy TOEIC Test 10',
-      tags: ['Practice', 'Part 1'],
-      score: '0/6',
-      time: '0:00:06',
-    },
-    {
-      date: '01/11/2024',
-      name: 'New Economy TOEIC Test 10',
-      tags: ['Practice', 'Part 1'],
-      score: '0/6',
-      time: '0:00:22',
-    },
-  ];
+  if (!statData) {
+      return (
+          <SafeAreaView style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading statistics...</Text>
+          </SafeAreaView>
+      );
+  }
 
-  const renderStatCard = (item, index) => (
-    <View key={index} style={styles.statisticsItem}>
-      {item.icon}
-      <Text style={styles.statisticsLabel}>{item.label}</Text>
-      <Text style={styles.statisticsValue}>{item.value}</Text>
-      {item.unit && <Text style={styles.statisticsUnit}>{item.unit}</Text>}
+  const { totalTest, totalQuestion, totalAnswerCorrect, totalTime, maxScore, testPracticeCount, listen, read } = statData;
+
+  const StatCard = ({ label, value, style, valueStyle }) => (
+    <View style={[styles.statsCard, style]}>
+      <Text style={styles.statsCardLabel}>{label}</Text>
+      <Text style={[styles.statsCardValue, valueStyle]}>{value}</Text>
     </View>
   );
 
-  const renderTestHistoryItem = (item, index) => (
-    <TouchableOpacity key={index} style={styles.historyItem}>
-      <View style={styles.historyHeader}>
-        <Text style={styles.historyDate}>{item.date}</Text>
-        <Text style={styles.historyScore}>Score: {item.score}</Text>
-      </View>
-      
-      <Text style={styles.historyTitle} numberOfLines={2}>{item.name}</Text>
-      
-      <View style={styles.historyContent}>
-        <View style={styles.tagsContainer}>
-          {item.tags.map((tag, idx) => (
-            <View 
-              key={idx} 
-              style={[
-                styles.tag,
-                tag === 'Full Test' ? styles.fullTestTag : styles.practiceTag
-              ]}
-            >
-              <Text style={tag === 'Full Test' ? styles.fullTestText : styles.practiceText}>
-                {tag}
-              </Text>
-            </View>
-          ))}
-        </View>
-        <Text style={styles.historyTime}>⏱ {item.time}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.mainTitle}>
-        Result Statistics
-      </Text>
-      <Text style={styles.note}>
-        Note: Results show for the last 30 days by default.
-      </Text>
+      <SafeAreaView style={styles.container}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Page Title */}
+              <Text style={styles.pageTitle}>Learning Progress</Text>
 
-      <View style={styles.filterContainer}>
-        <View style={styles.pickerWrapper}>
-          <Picker
-            selectedValue={selectedTime}
-            onValueChange={setSelectedTime}
-            style={styles.picker}
-          >
-            <Picker.Item label="Last 30 Days" value="30" />
-            <Picker.Item label="Last 60 Days" value="60" />
-            <Picker.Item label="Last 90 Days" value="90" />
-          </Picker>
-        </View>
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Text style={styles.actionText}>Search</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.clearButton}>
-            <Text style={styles.clearButtonText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              {/* General Statistics Section */}
+              <View style={styles.sectionContainer}>
+                  <Text style={styles.sectionTitle}>Overview</Text>
+                  <View style={styles.pickerWrapper}>
+                      <Picker
+                        selectedValue={selectedTime}
+                        onValueChange={(value) => setSelectedTime(value)}
+                        style={styles.picker}
+                        mode="dropdown"
+                      >
+                          <Picker.Item label="Last 30 Days" value="30" />
+                          <Picker.Item label="Last 60 Days" value="60" />
+                          <Picker.Item label="Last 90 Days" value="90" />
+                      </Picker>
+                  </View>
 
-      <View style={styles.statisticsContainer}>
-        {statItems.map(renderStatCard)}
-      </View>
+                  <View style={styles.statsGrid}>
+                      <StatCard 
+                        label="Total Tests" 
+                        value={totalTest} 
+                        valueStyle={{color: '#4CAF50'}} 
+                      />
+                      <StatCard 
+                        label="Practice Sessions" 
+                        value={testPracticeCount} 
+                        valueStyle={{color: '#2196F3'}} 
+                      />
+                      <StatCard 
+                        label="Total Questions" 
+                        value={totalQuestion} 
+                        valueStyle={{color: '#FF9800'}} 
+                      />
+                      <StatCard 
+                        label="Correct Answers" 
+                        value={totalAnswerCorrect} 
+                        valueStyle={{color: '#9C27B0'}} 
+                      />
+                      <StatCard 
+                        label="Study Time" 
+                        value={`${totalTime} minutes`} 
+                        valueStyle={{color: '#F44336'}} 
+                      />
+                      <StatCard 
+                        label="Highest Score" 
+                        value={maxScore} 
+                        valueStyle={{color: '#FF5722'}} 
+                      />
+                  </View>
+              </View>
 
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>Test History</Text>
-        <View style={styles.historyContainer}>
-          {testHistory.map(renderTestHistoryItem)}
-        </View>
-        <TouchableOpacity style={styles.viewAllButton}>
-          <Text style={styles.viewAllText}>View All ▸</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+              {/* Tab Selector */}
+              <View style={styles.tabContainer}>
+                  <TouchableOpacity
+                      style={[
+                          styles.tabButton, 
+                          selectedTab === 'listening' && styles.activeTab
+                      ]}
+                      onPress={() => setSelectedTab('listening')}
+                  >
+                      <Text style={[
+                          styles.tabText, 
+                          selectedTab === 'listening' && styles.activeTabText
+                      ]}>Listening</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                      style={[
+                          styles.tabButton, 
+                          selectedTab === 'reading' && styles.activeTab
+                      ]}
+                      onPress={() => setSelectedTab('reading')}
+                  >
+                      <Text style={[
+                          styles.tabText, 
+                          selectedTab === 'reading' && styles.activeTabText
+                      ]}>Reading</Text>
+                  </TouchableOpacity>
+              </View>
+
+              {/* Performance Details */}
+              <View style={styles.performanceContainer}>
+                  {selectedTab === 'listening' && (
+                      <>
+                          <StatCard 
+                            label="Listening Tests" 
+                            value={listen.totalTest} 
+                            style={styles.performanceMainCard} 
+                            valueStyle={{color: '#2196F3', fontSize: 20}}
+                          />
+                          <View style={styles.performanceGrid}>
+                              <StatCard 
+                                label="Total Questions" 
+                                value={listen.totalQuestion} 
+                                valueStyle={{color: '#4CAF50'}} 
+                              />
+                              <StatCard 
+                                label="Correct Answers" 
+                                value={listen.totalAnswerCorrect} 
+                                valueStyle={{color: '#9C27B0'}} 
+                              />
+                              <StatCard 
+                                label="Highest Score" 
+                                value={listen.maxScore} 
+                                valueStyle={{color: '#FF9800'}} 
+                              />
+                              <StatCard 
+                                label="Average Score" 
+                                value={listen.avgScore.toFixed(2)} 
+                                valueStyle={{color: '#FF5722'}} 
+                              />
+                          </View>
+                      </>
+                  )}
+
+                  {selectedTab === 'reading' && (
+                      <>
+                          <StatCard 
+                            label="Reading Tests" 
+                            value={read.totalTest} 
+                            style={styles.performanceMainCard} 
+                            valueStyle={{color: '#2196F3', fontSize: 20}}
+                          />
+                          <View style={styles.performanceGrid}>
+                              <StatCard 
+                                label="Total Questions" 
+                                value={read.totalQuestion} 
+                                valueStyle={{color: '#4CAF50'}} 
+                              />
+                              <StatCard 
+                                label="Correct Answers" 
+                                value={read.totalAnswerCorrect} 
+                                valueStyle={{color: '#9C27B0'}} 
+                              />
+                              <StatCard 
+                                label="Highest Score" 
+                                value={read.maxScore} 
+                                valueStyle={{color: '#FF9800'}} 
+                              />
+                              <StatCard 
+                                label="Average Score" 
+                                value={read.avgScore.toFixed(2)} 
+                                valueStyle={{color: '#FF5722'}} 
+                              />
+                          </View>
+                      </>
+                  )}
+              </View>
+          </ScrollView>
+      </SafeAreaView>
   );
 };
 
+
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
+      flex: 1,
+      backgroundColor: '#FFFFFF',
   },
-  mainTitle: {
-    marginTop: 30,
-    fontWeight: '700',
-    fontSize: 22,
-    textAlign: 'center',
-    marginVertical: 16,
-    color: '#333',
+  pageTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: '#333333',
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 8,
   },
-  note: {
-    color: '#d9534f',
-    fontSize: 14,
-    textAlign: 'center',
-    padding: 12,
-    backgroundColor: '#fff3cd',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 8,
+  loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#FFFFFF',
   },
-  filterContainer: {
-    padding: 16,
-    gap: 12,
-  },
-  pickerWrapper: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    marginBottom: 8,
-  },
-  picker: {
-    height: 48,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#007bff',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  clearButton: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    alignItems: 'center',
-  },
-  actionText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  clearButtonText: {
-    color: '#6c757d',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  statisticsContainer: {
-    padding: 8,
-  },
-  statisticsItem: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    marginHorizontal: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-    alignItems: 'center',
-  },
-  icon: {
-    marginBottom: 8,
-  },
-  iconText: {
-    fontSize: 28,
-  },
-  statisticsLabel: {
-    fontSize: 14,
-    color: '#6c757d',
-    marginBottom: 4,
-  },
-  statisticsValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  statisticsUnit: {
-    fontSize: 14,
-    color: '#6c757d',
-    marginTop: 2,
+  loadingText: {
+      fontSize: 18,
+      color: '#666666',
   },
   sectionContainer: {
-    padding: 16,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      backgroundColor: '#F5F5F5',
+      borderRadius: 12,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#007bff',
-    marginBottom: 12,
+      fontSize: 18,
+      fontWeight: '600',
+      color: '#333333',
+      marginBottom: 12,
   },
-  historyContainer: {
-    gap: 8,
+  pickerWrapper: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 8,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: '#E0E0E0',
   },
-  historyItem: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+  statsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
   },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+  statsCard: {
+      width: '48%',
+      backgroundColor: '#FFFFFF',
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 12,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: '#E0E0E0',
   },
-  historyDate: {
-    color: '#6c757d',
-    fontSize: 13,
+  statsCardLabel: {
+      color: '#666666',
+      fontSize: 13,
+      marginBottom: 4,
   },
-  historyTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#212529',
+  statsCardValue: {
+      color: '#333333',
+      fontSize: 16,
+      fontWeight: '700',
   },
-  historyContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  tabContainer: {
+      flexDirection: 'row',
+      marginHorizontal: 16,
+      backgroundColor: '#F5F5F5',
+      borderRadius: 10,
+      marginBottom: 16,
   },
-  tagsContainer: {
-    flexDirection: 'row',
-    gap: 6,
-    flex: 1,
+  tabButton: {
+      flex: 1,
+      paddingVertical: 12,
+      alignItems: 'center',
+      borderRadius: 10,
   },
-  tag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+  activeTab: {
+      backgroundColor: '#2196F3',
   },
-  fullTestTag: {
-    backgroundColor: '#d4edda',
+  tabText: {
+      fontSize: 16,
+      color: '#666666',
   },
-  practiceTag: {
-    backgroundColor: '#fff3cd',
+  activeTabText: {
+      color: 'white',
+      fontWeight: '600',
   },
-  fullTestText: {
-    color: '#155724',
-    fontSize: 12,
+  performanceContainer: {
+      marginHorizontal: 16,
   },
-  practiceText: {
-    color: '#856404',
-    fontSize: 12,
+  performanceMainCard: {
+      backgroundColor: '#E3F2FD',
+      marginBottom: 16,
   },
-  historyScore: {
-    color: '#007bff',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  historyTime: {
-    color: '#6c757d',
-    fontSize: 13,
-  },
-  viewAllButton: {
-    alignItems: 'center',
-    padding: 12,
-    marginTop: 8,
-  },
-  viewAllText: {
-    color: '#007bff',
-    fontSize: 14,
-    fontWeight: '500',
+  performanceGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
   },
 });
 

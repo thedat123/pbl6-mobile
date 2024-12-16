@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { API_BASE_URL } from '@env';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.45; // Tăng width một chút
@@ -63,7 +64,7 @@ const TopicCard = ({ item, onPress }) => {
                 />
               </View>
               <Text style={styles.progressText}>
-                {item.__listWord__?.length || 0} từ vựng
+                {item.listWord?.length || 0} từ vựng
               </Text>
             </View>
           </View>
@@ -181,12 +182,20 @@ const VocabDetailScreen = ({ route }) => {
   ];
 
   useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []);   
+
+  useEffect(() => {
     if (topicId) {
-      fetch(`http://10.0.2.2:3000/api/v1/group-topic/${topicId}`)
+      fetch(`${API_BASE_URL}:3001/api/v1/group-topic/${topicId}`)
         .then(response => response.json())
         .then(data => {
           setSelectedTopic(data);
-          setTopics(data.__topics__ || []);
+          setTopics(data.topics || []);
         })
         .catch(error => console.error('Error fetching topic data:', error));
     }

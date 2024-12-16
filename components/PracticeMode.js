@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,79 +9,82 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { AntDesign, Entypo } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import axios from 'axios';
+import { API_BASE_URL } from '@env';
 
 const PracticeMode = () => {
+  const route = useRoute();
   const [selectedParts, setSelectedParts] = useState(new Set());
   const [selectedTime, setSelectedTime] = useState(null);
+  const [parts, setParts] = useState([]); 
   const navigation = useNavigation();
-  const parts = [
-    {
-      number: 1,
-      title: 'Part 1',
-      subtitle: '6 questions',
-      tags: ['People', 'Objects', 'Situations']
-    },
-    {
-      number: 2,
-      title: 'Part 2',
-      subtitle: '25 questions',
-      tags: ['WH Questions', 'Yes/No', 'Tag Questions']
-    },
-    {
-      number: 3,
-      title: 'Part 3',
-      subtitle: '39 questions',
-      tags: ['Business', 'Office Work', 'Services']
-    },
-    {
-      number: 4,
-      title: 'Part 4',
-      subtitle: '30 questions',
-      tags: ['Business', 'Office Work', 'Services']
-    },
-    {
-      number: 5,
-      title: 'Part 5',
-      subtitle: '30 questions',
-      tags: ['Business', 'Office Work', 'Services']
-    },
-    {
-      number: 6,
-      title: 'Part 6',
-      subtitle: '16 questions',
-      tags: ['Business', 'Office Work', 'Services']
-    },
-    {
-      number: 7,
-      title: 'Part 7',
-      subtitle: '54 questions',
-      tags: ['Emails', 'Articles', 'Forms']
-    }
-  ];
+  const { id, test } = route.params;
 
-  const togglePart = (partNumber) => {
+  useEffect(() => {
+    if (!API_BASE_URL) {
+        console.error('API_BASE_URL is not defined. Please check your .env configuration.');
+        setError('Configuration Error: Unable to connect to server');
+        return;
+    }
+  }, []);   
+
+  const fetchParts = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}:3001/api/v1/test/${id}`);
+      if (response.data) {
+        const testData = response.data;
+  
+        const availableParts = testData.groupQuestions.reduce((acc, group) => {
+          if (group.part?.key && !acc.some(part => part.key === group.part.key)) {
+            acc.push({
+              key: group.part.key,
+              name: `Part ${group.part.key.replace('part', '')}`,
+              totalQuestion: group.questions?.length || 0,
+            });
+          }
+          return acc;
+        }, []);
+  
+        const sortedParts = availableParts.sort((a, b) => a.key.localeCompare(b.key));
+        setParts(sortedParts);
+      } else {
+        throw new Error('No data found for this test');
+      }
+    } catch (error) {
+      console.error('Error fetching parts:', error.message);
+    }
+  }, [id]);  
+
+  useEffect(() => {
+    fetchParts(); 
+  }, [fetchParts]);
+
+  const togglePart = (partId) => {
     setSelectedParts((prevSelectedParts) => {
       const newSelected = new Set(prevSelectedParts);
-      if (newSelected.has(partNumber)) {
-        newSelected.delete(partNumber);
+      if (newSelected.has(partId)) {
+        newSelected.delete(partId);
       } else {
-        newSelected.add(partNumber);
+        newSelected.add(partId);
       }
       return newSelected;
     });
   };
-  
+
   const handleStart = () => {
     if (selectedParts.size > 0) {
-      // Always navigate to TestBase, passing selected parts
+      const selectedPartIds = Array.from(selectedParts).map((key) => {
+        return `Part ${key.replace('part', '')}`;
+      });
       navigation.navigate('TestBase', {
-        selectedParts: Array.from(selectedParts),
-        timeLimit: selectedTime
+        selectedParts: selectedPartIds,
+        timeLimit: selectedTime,
+        testId: id,
       });
     }
-  };
-  
+  };  
+
   const renderTip = () => (
     <View style={styles.tipCard}>
       <View style={styles.tipHeader}>
@@ -95,38 +98,33 @@ const PracticeMode = () => {
   
   const renderPart = (part) => (
     <TouchableOpacity
-      key={part.number}
+      key={part.key} 
       style={[
         styles.partCard,
-        selectedParts.has(part.number) && styles.partCardSelected
+        selectedParts.has(part.key) && styles.partCardSelected,
       ]}
-      onPress={() => togglePart(part.number)}
+      onPress={() => togglePart(part.key)}
     >
       <View style={styles.partHeader}>
         <View style={styles.partTitleContainer}>
-          <Text style={styles.partTitle}>{part.title}</Text>
-          <Text style={styles.partSubtitle}>{part.subtitle}</Text>
+          <Text style={styles.partTitle}>{part.name}</Text>
+          <Text style={styles.partSubtitle}>{part.totalQuestion} questions</Text>
         </View>
-        <View style={[
+        <View
+          style={[
             styles.checkbox,
-            selectedParts.has(part.number) && styles.checkboxSelected
-        ]}>
-            {selectedParts.has(part.number) && (
-                <Entypo name="check" size={16} color="white" />
-            )}
+            selectedParts.has(part.key) && styles.checkboxSelected,
+          ]}
+        >
+          {selectedParts.has(part.key) && (
+            <Entypo name="check" size={16} color="white" />
+          )}
         </View>
-      </View>
-      
-      <View style={styles.tagsContainer}>
-        {part.tags.map((tag, index) => (
-          <View key={index} style={styles.tag}>
-            <Text style={styles.tagText}>{tag}</Text>
-          </View>
-        ))}
       </View>
     </TouchableOpacity>
   );
-  
+      
+
   const renderTimePicker = () => (
     <View style={styles.timePickerContainer}>
       <Text style={styles.timePickerLabel}>Time Limit</Text>
@@ -139,17 +137,13 @@ const PracticeMode = () => {
         >
           <Picker.Item label="Select time limit" value={null} />
           {Array.from({ length: 12 }, (_, i) => (i + 1) * 5).map((time) => (
-            <Picker.Item
-              key={time}
-              label={`${time} minutes`}
-              value={time}
-            />
+            <Picker.Item key={time} label={`${time} minutes`} value={time} />
           ))}
         </Picker>
       </View>
     </View>
-  );
-  
+  );  
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.content}>
@@ -160,11 +154,11 @@ const PracticeMode = () => {
         </View>
         {renderTimePicker()}
       </ScrollView>
-  
+
       <TouchableOpacity
         style={[
           styles.startButton,
-          selectedParts.size === 0 && styles.startButtonDisabled
+          selectedParts.size === 0 && styles.startButtonDisabled,
         ]}
         disabled={selectedParts.size === 0}
         onPress={handleStart}
@@ -175,7 +169,8 @@ const PracticeMode = () => {
       </TouchableOpacity>
     </SafeAreaView>
   );
-};  
+};
+
 
 const styles = StyleSheet.create({
   container: {

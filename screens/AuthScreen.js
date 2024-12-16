@@ -72,7 +72,7 @@ const AuthScreen = props => {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: 'white',  // Ensure full screen with a background
+        backgroundColor: 'white', 
     },
     scrollView: {
         flexGrow: 1,
@@ -93,8 +93,9 @@ const styles = StyleSheet.create({
     container: {
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: width * 0.01,  // Adjust padding based on screen width
+        paddingHorizontal: width * 0.01,  
         marginBottom: 20,
+        marginTop: 30,
     },
     switchButton: {
         flexDirection: 'row',
@@ -107,7 +108,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     mainSlogan: {
-        fontSize: isSmallDevice ? 24 : 30,  // Adjust font size based on screen size
+        fontSize: isSmallDevice ? 24 : 30,  
         fontWeight: 'bold',
         marginBottom: 20,
         color: '#203A90',
