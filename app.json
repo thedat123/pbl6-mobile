@@ -5,7 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "light",
     "scheme": "engflash",
     "splash": {
@@ -23,7 +26,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.engflash.app",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you.",
+        "SKAdNetworkItems": [
+          {
+            "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "n38lu8286q.skadnetwork"
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -41,6 +55,11 @@
       "expo-asset",
       "expo-facebook",
       "expo-google-sign-in"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4df54e3d-a490-46c3-b2de-b046437c32b1"
+      }
+    }
   }
 }

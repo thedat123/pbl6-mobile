@@ -1,29 +1,38 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, ScrollView, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, ScrollView, Animated, Image } from 'react-native';
 import { ProgressCircle } from 'react-native-svg-charts';
 import { LineChart } from 'react-native-chart-kit';
 import { useMemo, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { API_BASE_URL } from '@env';
+import { FontAwesome } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
+import Pagination from '../components/Pagination';
 
 const { width } = Dimensions.get('window');
-
+const ITEMS_PER_PAGE = 4;
 const VocabResultScreen = ({ route }) => {
   const { results, totalQuestions, topicId, topicName, totalTime } = route.params;
   const navigation = useNavigation();
   const [progress, setProgress] = useState(0);
   const progressAnimation = useMemo(() => new Animated.Value(0), []);
-
-  const uniqueWords = Array.isArray(results) ? [...new Set(results.map(r => r.currentIdQuestion))] : [];
-
-  const correctWords = uniqueWords.filter(wordId =>
-    results
-      .filter(r => r.currentIdQuestion === wordId)
-      .every(r => r.isCorrect)
-  );
-
-  const incorrectWords = uniqueWords.filter(wordId => !correctWords.includes(wordId));
+  const [detailedWords, setDetailedWords] = useState({ correct: [], incorrect: [] });
+  const uniqueWords = useMemo(() => {
+    return Array.isArray(results) ? [...new Set(results.map(r => r.currentIdQuestion))] : [];
+  }, [results]);
+  
+  const correctWords = useMemo(() => {
+    return uniqueWords.filter(wordId =>
+      results
+        .filter(r => r.currentIdQuestion === wordId)
+        .every(r => r.isCorrect)
+    );
+  }, [uniqueWords, results]);
+  
+  const incorrectWords = useMemo(() => {
+    return uniqueWords.filter(wordId => !correctWords.includes(wordId));
+  }, [uniqueWords, correctWords]);  
 
   const correctAnswers = correctWords.length;
   const incorrectAnswers = incorrectWords.length;
@@ -34,10 +43,11 @@ const VocabResultScreen = ({ route }) => {
   const [detailedResult, setDetailedResult] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const [correctCurrentPage, setCorrectCurrentPage] = useState(1);
+  const [incorrectCurrentPage, setIncorrectCurrentPage] = useState(1);
+
   useEffect(() => {
-    console.log(results);
-    console.log("=====================================");
-    const targetProgress = maxCorrectAnswers / (totalQuestions / 2); 
+    const targetProgress = maxCorrectAnswers / (totalQuestions / 2);
     progressAnimation.addListener(({ value }) => {
       setProgress(value);
     });
@@ -49,7 +59,8 @@ const VocabResultScreen = ({ route }) => {
     }).start();
 
     return () => progressAnimation.removeAllListeners();
-  }, [progressAnimation, maxCorrectAnswers]);
+  }, [progressAnimation, maxCorrectAnswers, totalQuestions]);
+
 
   useEffect(() => {
     const saveResultsToApi = async () => {
@@ -84,6 +95,34 @@ const VocabResultScreen = ({ route }) => {
   }, [correctWords, results, topicId, totalTime]);
 
   useEffect(() => {
+    const getDetailedWords = () => {
+      const correct = results
+        .filter(r => correctWords.includes(r.currentIdQuestion))
+        .map(r => ({
+          word: r.word,
+          meaning: r.meaning,
+          id: r.currentIdQuestion,
+        }));
+  
+      const incorrect = results
+        .filter(r => incorrectWords.includes(r.currentIdQuestion))
+        .map(r => ({
+          word: r.word,
+          meaning: r.meaning,
+          id: r.currentIdQuestion,
+        }));
+  
+      setDetailedWords({
+        correct: [...new Set(correct.map(JSON.stringify))].map(JSON.parse),
+        incorrect: [...new Set(incorrect.map(JSON.stringify))].map(JSON.parse),
+      });
+      setLoading(false);
+    };
+  
+    getDetailedWords();
+  }, [results, correctWords, incorrectWords]);  
+
+  useEffect(() => {
     if (historyId) {
       const fetchDetailedResults = async () => {
         try {
@@ -92,23 +131,28 @@ const VocabResultScreen = ({ route }) => {
             `${API_BASE_URL}:3001/api/v1/topic-history/${historyId}`,
             {
               headers: {
-                'Authorization': `Bearer ${token}`,
+                Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
               },
             }
           );
           if (!response.ok) throw new Error('Failed to fetch detailed results');
           const data = await response.json();
-          setDetailedResult(data);
+  
+          setDetailedWords({
+            correct: data.correctWord || [],
+            incorrect: data.incorrectWord || [],
+          });
+  
           setLoading(false);
         } catch (error) {
           console.error('Error fetching detailed results:', error);
         }
       };
-
+  
       fetchDetailedResults();
     }
-  }, [historyId]);
+  }, [historyId]);  
 
   const handleNavigateHome = () => {
     navigation.dispatch(
@@ -118,6 +162,88 @@ const VocabResultScreen = ({ route }) => {
       })
     );
   };
+
+  const handleSpeak = async (audioUri) => {
+      if (audioUri) {
+        try {
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: audioUri },
+            { shouldPlay: true }
+          );
+    
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.didJustFinish) {
+              sound.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
+            }
+          });
+        } catch (error) {
+          console.error('Error playing audio:', error);
+        }
+      }
+  };
+
+  const renderWordDetails = (words, type, currentPage, setCurrentPage) => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const currentWords = words.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  
+    return (
+      <View style={styles.wordListCard}>
+        <View style={styles.wordListHeader}>
+          <View style={styles.headerIconContainer}>
+            <Text style={styles.headerIcon}>
+              {type === 'correct' ? '✅' : '❌'}
+            </Text>
+          </View>
+          <Text style={styles.wordListTitle}>
+            {type === 'correct' ? 'Correct Words' : 'Incorrect Words'}
+            <Text style={styles.wordCount}> ({words.length})</Text>
+          </Text>
+        </View>
+  
+        {currentWords.map((item, index) => (
+          <View
+            key={`${item.id}-${index}`}
+            style={[
+              styles.wordItem,
+              index % 2 === 0 ? styles.evenItem : styles.oddItem,
+            ]}
+          >
+            <Image
+              source={{ uri: item.thumbnail }}
+              style={styles.wordThumbnail}
+              resizeMode="cover"
+            />
+            <View style={styles.wordDetails}>
+              <Text style={styles.wordText}>{item.word}</Text>
+              <View style={styles.wordMetaContainer}>
+                <View style={styles.wordClassContainer}>
+                  <Text style={styles.wordClass}>{item.wordClass}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleSpeak(item.audio)}
+                  style={styles.audioButton}
+                >
+                  <FontAwesome name="volume-up" size={20} color="#4A90E2" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.translate}>{item.translate}</Text>
+            </View>
+          </View>
+        ))}
+  
+        {/* Pagination Section */}
+        <View style={styles.paginationContainer}>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={words.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={(page) => setCurrentPage(page)}
+          />
+        </View>
+      </View>
+    );
+  };
+  
 
   const handleNavigateTest = () => {
     navigation.dispatch(
@@ -210,6 +336,25 @@ const VocabResultScreen = ({ route }) => {
             style={styles.chart}
           />
         </View>
+
+        {!loading && (
+          <>
+            {detailedWords.correct.length > 0 &&
+              renderWordDetails(
+                detailedWords.correct,
+                'correct',
+                correctCurrentPage,
+                setCorrectCurrentPage
+              )}
+            {detailedWords.incorrect.length > 0 &&
+              renderWordDetails(
+                detailedWords.incorrect,
+                'incorrect',
+                incorrectCurrentPage,
+                setIncorrectCurrentPage
+              )}
+          </>
+        )}
 
         <View style={styles.actionButtons}>
           <TouchableOpacity style={[styles.button, styles.reviewButton]} onPress={handleNavigateLearn}>
@@ -401,6 +546,111 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  wordListContainer: {
+    padding: 16,
+    backgroundColor: '#F5F5F5',
+  },
+  headerContainer: {
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    paddingBottom: 8,
+  },
+  wordListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  wordListCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  wordListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  headerIconContainer: {
+    marginRight: 12,
+  },
+  headerIcon: {
+    fontSize: 24,
+  },
+  wordListTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A237E',
+  },
+  wordCount: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: 'normal',
+  },
+  wordItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  evenItem: {
+    backgroundColor: '#FFFFFF',
+  },
+  oddItem: {
+    backgroundColor: '#FAFAFA',
+  },
+  wordThumbnail: {
+    width: 70,
+    height: 70,
+    borderRadius: 12,
+  },
+  wordDetails: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  wordText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1A237E',
+    marginBottom: 6,
+  },
+  wordMetaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  wordClassContainer: {
+    backgroundColor: '#E8F0FE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  wordClass: {
+    fontSize: 14,
+    color: '#4A90E2',
+    fontWeight: '500',
+  },
+  translate: {
+    fontSize: 15,
+    color: '#666',
+    lineHeight: 20,
+  },
+  audioButton: {
+    padding: 6,
+    backgroundColor: '#F0F7FF',
+    borderRadius: 8,
   },
 });
 
