@@ -161,13 +161,9 @@ const TestDetailResult = () => {
           </View>
         </View>
 
-        {/* Action Buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate("TestScreen")}>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate("MainAppNavigator")}>
             <Text style={styles.buttonText}>Back to Exams Library</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>View Answer Details</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

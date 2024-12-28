@@ -15,12 +15,15 @@ import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import { API_BASE_URL } from '@env';
+import Pagination from '../components/Pagination';
 
 const TestScreen = () => {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
   const navigation = useNavigation();
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 4;
 
   useEffect(() => {
     if (!API_BASE_URL) {
@@ -56,8 +59,6 @@ const TestScreen = () => {
   }, [fetchTests]);
 
   const handleTestPress = (test) => {
-    console.log(test);
-    console.log("============================");
     navigation.navigate('TestSubject', { id: test.id, test });
   };   
 
@@ -94,10 +95,6 @@ const TestScreen = () => {
                 <Feather name="list" size={14} color="#666" />
                 <Text style={styles.metadataText}>{totalQuestions} Questions</Text>
               </View>
-              <View style={styles.metadataChip}>
-                <Feather name="zap" size={14} color="#666" />
-                <Text style={styles.metadataText}>{getDifficultyLabel()}</Text>
-              </View>
             </View>
           </View>
         </View>
@@ -122,12 +119,19 @@ const TestScreen = () => {
         </View>
       );
     }
-
+  
     const filteredTests = tests.filter(test => 
       test.name.toLowerCase().includes(searchText.toLowerCase())
     );
-
-    if (filteredTests.length === 0) {
+  
+    const totalFilteredTests = filteredTests.length;
+    const totalPages = Math.ceil(totalFilteredTests / ITEMS_PER_PAGE);
+    const paginatedTests = filteredTests.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE,
+      currentPage * ITEMS_PER_PAGE
+    );
+  
+    if (totalFilteredTests === 0) {
       return (
         <View style={styles.centerContent}>
           <Feather name="frown" size={50} color="#666" />
@@ -136,16 +140,26 @@ const TestScreen = () => {
         </View>
       );
     }
-
+  
     return (
       <ScrollView 
-        contentContainerStyle={styles.testList}
-        showsVerticalScrollIndicator={false}
-      >
-        {filteredTests.map(renderTestItem)}
-      </ScrollView>
+      contentContainerStyle={[styles.testList, { paddingBottom: 100 }]} // Adjust padding for better spacing
+      showsVerticalScrollIndicator={false}
+    >
+      {paginatedTests.map(renderTestItem)}
+      <View style={styles.paginationContainer}>
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalFilteredTests}
+          itemsPerPage={ITEMS_PER_PAGE}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
+      </View>
+    </ScrollView>
+    
     );
-  };
+  };  
 
   return (
     <SafeAreaView style={styles.container}>
@@ -328,6 +342,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginTop: 8,
+  },
+  paginationContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
 });
 

@@ -1,100 +1,122 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard } from 'react-native';
 
 const WritingVocab = ({ correctAnswer, onAnswer, isTimeUp }) => {
   const [inputText, setInputText] = useState('');
   const [isCorrect, setIsCorrect] = useState(null);
+  const [showHint, setShowHint] = useState(false);
 
-  // Ensure hooks are not conditionally called
   useEffect(() => {
     if (isTimeUp) {
       handleCheckAnswer(true);
     }
   }, [isTimeUp]);
 
-  // Handle answer submission or timeout
   const handleCheckAnswer = (isTimeout = false) => {
+    Keyboard.dismiss(); // Dismiss keyboard after checking
+    
     if (isTimeout) {
-      setInputText(correctAnswer); // Show the correct answer on timeout
-      setIsCorrect(false); // Mark as incorrect
-      onAnswer(false); // Notify parent of incorrect answer
+      setInputText(correctAnswer);
+      setIsCorrect(false);
+      onAnswer(false);
+      setShowHint(true);
     } else {
       const trimmedAnswer = inputText.trim().toLowerCase();
       const isAnswerCorrect = trimmedAnswer === correctAnswer.toLowerCase();
+      
       setIsCorrect(isAnswerCorrect);
       onAnswer(isAnswerCorrect);
       
-      // If the answer is incorrect, immediately show the correct answer
       if (!isAnswerCorrect) {
-        setInputText(correctAnswer); // Update input to show the correct answer
+        setInputText(correctAnswer);
+        setShowHint(true);
       }
     }
   };
 
-  // Check if input should be editable based on isCorrect
+  const handleReset = () => {
+    setInputText('');
+    setIsCorrect(null);
+    setShowHint(false);
+  };
+
   const isEditable = isCorrect === null || isCorrect === true;
 
   return (
     <View style={styles.container}>
-      {/* Answer Input */}
-      <TextInput
-        style={[
-          styles.inputBox,
-          isCorrect === true && styles.inputCorrect,
-          isCorrect === false && styles.inputIncorrect,
-        ]}
-        placeholder="Type your answer here..."
-        value={inputText}
-        onChangeText={setInputText}
-        autoCapitalize="none"
-        autoCorrect={false}
-        editable={isEditable} // Disable editing if answer is incorrect
-      />
+      {/* Input Section */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[
+            styles.inputBox,
+            isCorrect === true && styles.inputCorrect,
+            isCorrect === false && styles.inputIncorrect,
+          ]}
+          placeholder="Type your answer here..."
+          value={inputText}
+          onChangeText={setInputText}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={isEditable}
+          placeholderTextColor="#999"
+        />
+      </View>
 
-      {/* Check Answer Button */}
-      {!isTimeUp && (
-        <TouchableOpacity
-          style={[styles.checkButton, inputText.trim() && styles.checkButtonEnabled]}
-          onPress={() => handleCheckAnswer(false)}
-          disabled={inputText.trim() === ''}
-        >
-          <Text style={styles.checkButtonText}>CHECK ANSWER</Text>
-        </TouchableOpacity>
-      )}
+      {/* Button Section */}
+      <View style={styles.buttonContainer}>
+        {/* Check Answer Button */}
+        {!isTimeUp && isCorrect === null && (
+          <TouchableOpacity
+            style={[
+              styles.button, 
+              styles.checkButton,
+              inputText.trim() && styles.checkButtonEnabled
+            ]}
+            onPress={() => handleCheckAnswer(false)}
+            disabled={inputText.trim() === ''}
+          >
+            <Text style={styles.buttonText}>CHECK ANSWER</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Reset/Try Again Button */}
+        {isCorrect === false && (
+          <TouchableOpacity
+            style={[styles.button, styles.resetButton]}
+            onPress={handleReset}
+          >
+            <Text style={styles.buttonText}>TRY AGAIN</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 };
 
-// Styles
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#F7F9FC',
     borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 20,
+    marginVertical: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-    marginHorizontal: 30,
-    marginVertical: 20,
-    width: '90%',
-    alignSelf: 'center',
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  inputContainer: {
+    marginBottom: 20,
   },
   inputBox: {
-    borderWidth: 1,
-    borderColor: '#ddd', // Default border color
-    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    borderRadius: 15,
     paddingVertical: 15,
     paddingHorizontal: 20,
     fontSize: 16,
-    width: '100%',
-    backgroundColor: '#f9f9f9',
-    marginBottom: 25,
+    backgroundColor: 'white',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -102,32 +124,53 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   inputCorrect: {
-    borderColor: '#4CAF50', // Green border when the answer is correct
+    borderColor: '#4CAF50',
+    backgroundColor: '#E8F5E9',
   },
   inputIncorrect: {
-    borderColor: '#F44336', // Red border when the answer is incorrect
+    borderColor: '#F44336',
+    backgroundColor: '#FFEBEE',
   },
-  checkButton: {
-    backgroundColor: '#E0E0E0', // Grey background when disabled
-    borderRadius: 30, // Rounded button for modern feel
+  hintContainer: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 10,
+  },
+  hintText: {
+    color: '#333',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  button: {
+    borderRadius: 30,
     paddingVertical: 15,
     paddingHorizontal: 40,
-    justifyContent: 'center',
+    marginHorizontal: 10,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-    width: '80%',
-    marginTop: 10,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  checkButton: {
+    backgroundColor: '#E0E0E0',
   },
   checkButtonEnabled: {
-    backgroundColor: '#00C853', // Green background when enabled
+    backgroundColor: '#00C853',
   },
-  checkButtonText: {
-    fontSize: 18,
-    color: '#FFFFFF',
+  resetButton: {
+    backgroundColor: '#2196F3',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
     fontWeight: '600',
     letterSpacing: 1,
   },

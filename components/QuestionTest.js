@@ -31,6 +31,7 @@ export const QuestionNavigation = ({
         return styles.normalQuestion;
     }
   };
+
   const safeQuestions = Array.isArray(questions) ? questions : [];
 
   return (
@@ -87,7 +88,6 @@ export const QuestionOptions = ({ question, selectedAnswer, onAnswerSelect }) =>
               isSelected && styles.selectedOption,
             ]}
             onPress={() => {
-              // If the option is already selected, deselect it
               onAnswerSelect(
                 question.id, 
                 isSelected ? null : option.label

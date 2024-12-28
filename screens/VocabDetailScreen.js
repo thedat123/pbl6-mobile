@@ -6,19 +6,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Keyboard
+  Keyboard,
+  ActivityIndicator,
+  LogBox
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { API_BASE_URL } from '@env';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Pagination from '../components/Pagination';
 
 const { width, height } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.45; // Tăng width một chút
-const CARD_HEIGHT = height * 0.26; // Tăng height để có thêm không gian
+const CARD_WIDTH = width * 0.5; 
+const CARD_HEIGHT = height * 0.4; 
+const ITEMS_PER_PAGE = 4;
+
+LogBox.ignoreLogs([
+  'VirtualizedLists should never be nested',
+]);
 
 const TopicCard = ({ item, onPress }) => {
   const animatedScale = new Animated.Value(1);
+  const navigation = useNavigation();
 
   const onPressIn = () => {
     Animated.spring(animatedScale, {
@@ -64,7 +74,7 @@ const TopicCard = ({ item, onPress }) => {
                 />
               </View>
               <Text style={styles.progressText}>
-                {item.listWord?.length || 0} từ vựng
+                {item.listWord?.length || 0} vocabs
               </Text>
             </View>
           </View>
@@ -87,18 +97,130 @@ const StatBox = ({ label, value, icon }) => (
   </View>
 );
 
+const TopicModal = ({ visible, topic, onClose, navigation }) => {
+  const renderButton = (text, colors, onPress) => (
+    <TouchableOpacity
+      style={styles.learnButton}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <LinearGradient
+        colors={colors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.learnButtonGradient}
+      >
+        <Text style={styles.learnButtonText}>{text}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  return (
+    <Modal
+      animationType="fade"
+      transparent
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <LinearGradient
+            colors={['#ffffff', '#f8f9fa']}
+            style={styles.modalGradient}
+          >
+            {topic && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{topic.name}</Text>
+                  <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                    <FontAwesome5 name="times" size={22} color="#666" />
+                  </TouchableOpacity>
+                </View>
+
+                <Image 
+                  source={{ uri: topic.thumbnail }} 
+                  style={styles.modalImage}
+                />
+
+                <Text style={styles.modalDescription}>
+                  Learn vocabulary on the topic of{' '}
+                  <Text style={styles.emphasisText}>
+                    {topic.name || 'No information available'}
+                  </Text>{' '}
+                  to enhance your vocabulary skills.
+                </Text>
+
+                {topic.isLearned ? (
+                  <>
+                    {renderButton(
+                      'REVIEW',
+                      ['#4CAF50', '#2E7D32'],
+                      () => navigation.navigate('VocabTestScreen', { topicId: topic.id })
+                    )}
+                    {renderButton(
+                      'CONTINUE LEARNING',
+                      ['#FF9800', '#F57C00'],
+                      () => navigation.navigate('VocabLearnScreen', { topicId: topic.id })
+                    )}
+                    {renderButton(
+                      'VIEW RESULTS',
+                      ['#FF5722', '#D84315'],
+                      async () => {
+                        const savedResults = await AsyncStorage.getItem('latestVocabResults');
+                        const parsedResults = savedResults ? JSON.parse(savedResults) : null;
+
+                        console.log('Parsed results:', parsedResults);
+
+                        navigation.navigate('VocabResultScreen', {
+                          results: parsedResults.results || [],
+                          totalQuestions: (parsedResults?.correctWords.length || 0) + (parsedResults?.incorrectWords.length || 0),
+                          topicId: topic.id,
+                          topicName: topic.name,
+                          totalTime: parsedResults?.totalTime || 0,                         
+                        });
+                      }
+                    )}
+                  </>
+                ) : (
+                  renderButton(
+                    'START LEARNING',
+                    ['#4CAF50', '#2E7D32'],
+                    () => navigation.navigate('VocabLearnScreen', { topicId: topic.id })
+                  )
+                )}
+              </>
+            )}
+
+          </LinearGradient>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 const ReviewSection = ({ review }) => (
   <View style={styles.reviewCard}>
     <View style={styles.reviewHeader}>
       <View style={styles.reviewerInfo}>
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatarText}>{review.userName[0]}</Text>
+          {review.user.avatar ? (
+            <Image
+              source={{ uri: review.user.avatar }}
+              style={styles.avatarImage}
+            />
+          ) : (
+            <Text style={styles.avatarText}>
+              {review.user.name ? review.user.name[0] : 'U'}
+            </Text>
+          )}
         </View>
-        <Text style={styles.reviewerName}>{review.userName}</Text>
+        <Text style={styles.reviewerName} numberOfLines={1}>
+          {review.user.name || 'Anonymous'}
+        </Text>
       </View>
       <View style={styles.ratingContainer}>
         {[...Array(5)].map((_, i) => (
-          <FontAwesome5 
+          <FontAwesome5
             key={i}
             name="star"
             solid={i < review.rating}
@@ -108,56 +230,195 @@ const ReviewSection = ({ review }) => (
         ))}
       </View>
     </View>
-    <Text style={styles.reviewText}>{review.review}</Text>
+    <Text style={styles.reviewText} numberOfLines={3}>
+      {review.ratingContent}
+    </Text>
   </View>
 );
 
-const TopicModal = ({ visible, topic, onClose, onLearn }) => (
-  <Modal
-    animationType="slide"
-    transparent
-    visible={visible}
-    onRequestClose={onClose}
-  >
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContent}>
-        <LinearGradient
-          colors={['#ffffff', '#f8f9fa']}
-          style={styles.modalGradient}
-        >
-          {topic && (
-            <>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{topic.name}</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <FontAwesome5 name="times" size={20} color="#666" />
-                </TouchableOpacity>
-              </View>
-              <Image source={{ uri: topic.thumbnail }} style={styles.modalImage} />
-              <Text style={styles.modalDescription}>
-                Học các từ vựng về chủ đề {topic.name || 'Chưa có thông tin'} để nâng cao vốn từ của bạn.
-              </Text>
+const ReviewsContainer = ({ topicId, refreshTrigger }) => {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
-              <TouchableOpacity
-                style={styles.learnButton}
-                onPress={onLearn}
-              >
-                <LinearGradient
-                  colors={['#4CAF50', '#81C784']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.learnButtonGradient}
-                >
-                  <Text style={styles.learnButtonText}>Bắt đầu học</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </>
-          )}
-        </LinearGradient>
-      </View>
+  useEffect(() => {
+    const fetchReviews = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}:3001/api/v1/rating/groupTopic/${topicId}`
+        );
+        const data = await response.json();
+        setReviews(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReviews();
+  }, [topicId, refreshTrigger]);
+
+  if (loading) {
+    return <ActivityIndicator size="large" color="#4CAF50" />;
+  }
+
+  if (error) {
+    return <Text style={styles.errorText}>Error: {error}</Text>;
+  }
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedReviews = reviews.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const renderItem = ({ item }) => <ReviewSection review={item} />;
+  
+  const renderSeparator = () => (
+    <View style={{ height: 10, backgroundColor: 'transparent' }} />
+  );
+
+  const renderHeader = () => (
+    <View style={styles.reviewsHeader}>
+      <Text style={styles.sectionTitle}>Reviews</Text>
     </View>
-  </Modal>
-);
+  );
+
+  const renderFooter = () => (
+    <View style={styles.paginationContainer}>
+      <Pagination
+        currentPage={currentPage}
+        totalItems={reviews.length}
+        itemsPerPage={ITEMS_PER_PAGE}
+        onPageChange={setCurrentPage}
+      />
+    </View>
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={paginatedReviews}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderItem}
+        ListHeaderComponent={renderHeader}
+        ItemSeparatorComponent={renderSeparator}
+        ListFooterComponent={renderFooter}
+      />
+    </View>
+  );
+};
+
+const CommentSection = ({ topicId, onCommentSubmitted }) => {
+  const [modal, setModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    onConfirm: () => {},
+    showCancel: false,
+  });
+
+  const [message, setMessage] = useState('');
+  const [rating, setRating] = useState(0);
+  const inputRef = useRef(null);
+
+  const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
+    setModal({ visible: true, title, message, type, showCancel, onConfirm });
+  };
+
+  const handleSubmitComment = async () => {
+    if (rating === 0 || message.trim() === '') {
+      showAlert('Error', 'Please provide a rating and a comment.', 'error');
+      return;
+    }
+  
+    const commentData = {
+      rating,
+      ratingContent: message,
+    };
+  
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}:3001/api/v1/rating/groupTopic/${topicId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(commentData),
+      });
+  
+      console.log(commentData);
+  
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Response data:', data);
+  
+        if (data && (data.success || response.status === 201)) {
+          showAlert('Success', 'Comment submitted successfully!', 'success');
+          setMessage('');
+          setRating(0);
+          Keyboard.dismiss();
+          onCommentSubmitted();
+        } else {
+          showAlert('Error', 'Error submitting comment. Please try again.', 'error');
+        }
+      } else {
+        const errorData = await response.json();
+        const errorMessage = errorData.message || 'Error submitting comment.';
+        showAlert('Error', errorMessage, 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showAlert('Error', 'An error occurred while submitting the comment.', 'error');
+    }
+  };
+  
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.commentContainer}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 20}
+    >
+      <Text style={styles.sectionTitle}>Your Comment</Text>
+
+      <View style={styles.ratingContainer}>
+        {[...Array(5)].map((_, i) => (
+          <TouchableOpacity key={i} onPress={() => setRating(i + 1)}>
+            <FontAwesome5
+              name="star"
+              solid={i < rating}
+              size={24}
+              color={i < rating ? '#FFD700' : '#E0E0E0'}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.commentInputContainer}>
+        <TextInput
+          ref={inputRef}
+          style={styles.commentInput}
+          value={message}
+          onChangeText={setMessage}
+          placeholder="Share your thoughts..."
+          placeholderTextColor="#999"
+          multiline
+          maxLength={500}
+          returnKeyType="done"
+          blurOnSubmit={true}
+          onSubmitEditing={handleSubmitComment}
+        />
+        <TouchableOpacity style={styles.sendButton} onPress={handleSubmitComment}>
+          <FontAwesome5 name="paper-plane" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+      <AlertModal modal={modal} setModal={setModal} />
+    </KeyboardAvoidingView>
+  );
+};
 
 const VocabDetailScreen = ({ route }) => {
   const navigation = useNavigation();
@@ -165,21 +426,24 @@ const VocabDetailScreen = ({ route }) => {
   const [message, setMessage] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
-  const [topics, setTopics] = useState([]); // Cập nhật topic từ API
+  const [topics, setTopics] = useState([]);
+  const [userDetails, setUserDetails] = useState(null);  // New state for user details
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef(null);
-  const [review, setReview] = useState({
-    userName: 'Khanh',
-    rating: 4,
-    review: 'Rất hài lòng với ứng dụng, giao diện đẹp và dễ sử dụng',
-  });
+  const [review, setReview] = useState({});
+  const [reviews, setReviews] = useState([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const stats = [
-    { label: 'Bài đã học', value: 1, icon: 'book-open' },
-    { label: 'Bài chưa học', value: 7, icon: 'book' },
-    { label: 'Từ đã thuộc', value: 24, icon: 'check-circle' },
-    { label: 'Từ chưa thuộc', value: 16, icon: 'circle' },
-  ];
+  const [stats, setStats] = useState([
+  ]);
+
+  const handleCommentSubmitted = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const addReview = (newReview) => {
+    setReviews((prevReviews) => [newReview, ...prevReviews]);
+  };
 
   useEffect(() => {
     if (!API_BASE_URL) {
@@ -187,18 +451,53 @@ const VocabDetailScreen = ({ route }) => {
         setError('Configuration Error: Unable to connect to server');
         return;
     }
-  }, []);   
+  }, []);
 
   useEffect(() => {
-    if (topicId) {
-      fetch(`${API_BASE_URL}:3001/api/v1/group-topic/${topicId}`)
-        .then(response => response.json())
-        .then(data => {
-          setSelectedTopic(data);
-          setTopics(data.topics || []);
-        })
-        .catch(error => console.error('Error fetching topic data:', error));
-    }
+    const fetchData = async () => {
+      if (topicId) {
+        try {  
+          const token = await AsyncStorage.getItem('token');
+          const userResponse = await fetch(`${API_BASE_URL}:3001/api/v1/group-topic/${topicId}/user`, {
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+          });
+
+          const userData = await userResponse.json();
+          setSelectedTopic(userData);
+          setTopics(userData.topics || []);
+
+          let learnedLessons = 0;
+          let unlearnedLessons = 0;
+          let unlearnedWords = 0;
+          let totalWords = 0;
+          let totalRetainedWords = 0;
+
+          userData.topics.forEach((topic) => {
+            if (topic.isLearned) {
+              learnedLessons++;
+            } else {
+              unlearnedLessons++;
+            }
+
+            totalRetainedWords += topic.retainedWord;
+            totalWords += topic.listWord.length;
+          });
+
+          unlearnedWords = totalWords - totalRetainedWords;
+          setStats([
+            { label: 'Lessons Learned', value: learnedLessons, icon: 'book-open' },
+            { label: 'Lessons Unlearned', value: unlearnedLessons, icon: 'book' },
+            { label: 'Words Mastered', value: totalRetainedWords, icon: 'check-circle' },
+            { label: 'Words Unmastered', value: unlearnedWords, icon: 'circle' },
+          ]);          
+          setUserDetails(userData);
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        }
+      }
+    };
+  
+    fetchData();
   }, [topicId]);  
 
   useEffect(() => {
@@ -206,7 +505,6 @@ const VocabDetailScreen = ({ route }) => {
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
         setKeyboardHeight(e.endCoordinates.height);
-        // Tự động scroll đến phần comment khi bàn phím hiện
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -235,7 +533,7 @@ const VocabDetailScreen = ({ route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
@@ -246,7 +544,6 @@ const VocabDetailScreen = ({ route }) => {
         >
           <ScrollView
             ref={scrollViewRef}
-            showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
@@ -256,21 +553,20 @@ const VocabDetailScreen = ({ route }) => {
                 <TopicCard
                   item={item}
                   onPress={() => {
-                    setSelectedTopic(item); // Set the selected topic
-                    setModalVisible(true); // Open the modal
+                    setSelectedTopic(item);
+                    setModalVisible(true);
                   }}
                 />
               )}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.topicList}
-              snapToInterval={CARD_WIDTH + 20}  // Ensure this value is correct for your design
+              snapToInterval={CARD_WIDTH + 20}
               decelerationRate="fast"
               keyExtractor={item => item.id.toString()}
               scrollEventThrottle={16}
             />
 
-            {/* Stats Section */}
             <View style={styles.statsContainer}>
               <Text style={styles.sectionTitle}>Tiến độ học tập</Text>
               <View style={styles.statsGrid}>
@@ -280,46 +576,8 @@ const VocabDetailScreen = ({ route }) => {
               </View>
             </View>
 
-            {/* Reviews Section */}
-            <View style={styles.reviewsContainer}>
-              <View style={styles.reviewsHeader}>
-                <Text style={styles.sectionTitle}>Đánh giá</Text>
-                <TouchableOpacity>
-                  <Text style={styles.viewAllText}>Xem tất cả</Text>
-                </TouchableOpacity>
-              </View>
-              <ReviewSection review={review} />
-            </View>
-
-            {/* Comment Section */}
-            <View style={[styles.commentContainer, { marginBottom: keyboardHeight > 0 ? keyboardHeight : 20 }]}>
-              <Text style={styles.sectionTitle}>Nhận xét của bạn</Text>
-              <View style={styles.commentInputContainer}>
-                <TextInput
-                  style={styles.commentInput}
-                  value={message}
-                  onChangeText={setMessage}
-                  placeholder="Chia sẻ cảm nhận của bạn..."
-                  placeholderTextColor="#999"
-                  multiline
-                  maxLength={500}
-                  returnKeyType="done"
-                  blurOnSubmit={true}
-                  onSubmitEditing={handleSubmitComment}
-                />
-                <TouchableOpacity 
-                  style={styles.sendButton}
-                  onPress={handleSubmitComment}
-                >
-                  <LinearGradient
-                    colors={['#4CAF50', '#81C784']}
-                    style={styles.sendButtonGradient}
-                  >
-                    <FontAwesome5 name="paper-plane" size={20} color="#fff" />
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <ReviewsContainer topicId={topicId} refreshTrigger={refreshTrigger} />
+            <CommentSection topicId={topicId} onCommentSubmitted={handleCommentSubmitted} />
           </ScrollView>
         </LinearGradient>
       </KeyboardAvoidingView>
@@ -328,15 +586,52 @@ const VocabDetailScreen = ({ route }) => {
         visible={modalVisible}
         topic={selectedTopic}
         onClose={() => setModalVisible(false)}
-        onLearn={() => {
-          navigation.navigate("VocabLearnScreen", { topicId: selectedTopic.id });
-          setModalVisible(false);
-        }}
+        navigation={navigation}
       />
-
     </SafeAreaView>
   );
 };
+
+const AlertModal = ({ modal, setModal }) => (
+  <Modal
+    transparent
+    visible={modal.visible}
+    animationType="fade"
+    onRequestClose={() => setModal(prev => ({ ...prev, visible: false }))}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={[styles.modalHeader, styles[`${modal.type}Header`]]}>
+          <Text style={styles.modalTitle}>{modal.title}</Text>
+        </View>
+        <View style={styles.modalBody}>
+          <Text style={styles.modalMessage}>{modal.message}</Text>
+        </View>
+        <View style={styles.modalFooter}>
+          {modal.showCancel && (
+            <TouchableOpacity 
+              style={[styles.modalButton, styles.modalCancelButton]}
+              onPress={() => setModal(prev => ({ ...prev, visible: false }))}
+            >
+              <Text style={styles.modalButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={[styles.modalButton, styles.modalConfirmButton]}
+            onPress={() => {
+              setModal(prev => ({ ...prev, visible: false }));
+              modal.onConfirm();
+            }}
+          >
+            <Text style={styles.modalButtonText}>
+              {modal.type === 'danger' ? 'Logout' : 'OK'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -480,15 +775,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#fff',
   },
   reviewerName: {
@@ -505,91 +800,218 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   commentContainer: {
-    paddingVertical: 20,
+    padding: 20, 
+    backgroundColor: '#f9f9f9', 
+    borderRadius: 10, 
+    marginTop: 15,
+  },
+  sectionTitle: {
+    fontSize: 20, 
+    fontWeight: 'bold',
+    color: '#333', 
+    marginBottom: 12, 
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    marginVertical: 12, 
+    justifyContent: 'center', 
   },
   commentInputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0', // Light border for separation
+    paddingTop: 10, // Padding above the input field
+    paddingBottom: 30
   },
   commentInput: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 14,
-    color: '#333',
-    maxHeight: 100,
-    minHeight: 45,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    height: 120, // Increased height for a more comfortable typing area
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 8, // Rounded corners for the input
+    padding: 12, // Padding for comfort while typing
+    fontSize: 16, // Slightly larger font size for easier reading
+    backgroundColor: '#fff', // White background to focus on text
+    textAlignVertical: 'top', // Ensure text starts at the top of the input
+    marginRight: 15,
   },
   sendButton: {
-    marginLeft: 10,
-    alignSelf: 'flex-end',
+    width: 50, 
+    height: 50,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50', 
   },
   sendButtonGradient: {
-    padding: 12,
-    borderRadius: 10,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 50, 
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.75)', // Darker overlay for better contrast
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
-    width: width * 0.85,
+    width: '95%',
+    maxWidth: 500, // Limit maximum width for larger screens
     backgroundColor: '#fff',
-    borderRadius: 15,
+    borderRadius: 24,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   modalGradient: {
-    padding: 20,
+    padding: 24,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    flex: 1,
+    textAlign: 'center',
+    marginRight: 40, // Compensate for close button
   },
   closeButton: {
-    padding: 5,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   modalImage: {
     width: '100%',
-    height: 150,
-    resizeMode: 'contain',
+    height: 200,
+    resizeMode: 'cover',
+    borderRadius: 16,
     marginBottom: 20,
   },
   modalDescription: {
-    fontSize: 16,
-    color: '#555',
+    fontSize: 17,
+    color: '#444',
     textAlign: 'center',
-    marginBottom: 20,
+    lineHeight: 24,
+    marginBottom: 28,
+    paddingHorizontal: 10,
   },
   learnButton: {
-    alignSelf: 'center',
+    width: '100%',
+    marginBottom: 12,
   },
   learnButtonGradient: {
-    padding: 10,
-    borderRadius: 10,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
   },
   learnButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#fff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  emphasisText: {
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  avatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    padding: 20,
+    alignItems: 'center',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  modalHeaderError: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderSuccess: {
+    backgroundColor: '#34A853',
+  },
+  modalHeaderDanger: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderWarning: {
+    backgroundColor: '#FBBC04',
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 24,
+    backgroundColor: '#fff',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8EAED',
+  },
+  modalButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#34A853',
+  },
+  modalCancelButton: {
+    backgroundColor: '#EA4335',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

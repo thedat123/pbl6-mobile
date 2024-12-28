@@ -111,24 +111,28 @@ const HomeVocabScreen = () => {
 
   const fetchVocabGroups = async () => {
     try {
-        const response = await fetch(`${API_BASE_URL}:3001/api/v1/group-topic/`);
-        if (!response.ok) throw new Error('Failed to fetch vocab groups');
-        
-        const data = await response.json();
-
-        const processedData = data.map(group => ({
-            ...group,
-            topics: group.topics || [],
-            topicsCount: group.topics ? group.topics.length : 0,
-        }));
-
-        setVocabGroups(processedData);
-        await AsyncStorage.setItem('vocabGroups', JSON.stringify(processedData));
-        await AsyncStorage.setItem('lastUpdated', Date.now().toString());
+      const response = await fetch(`${API_BASE_URL}:3001/api/v1/group-topic/`);
+      if (!response.ok) throw new Error('Failed to fetch vocab groups');
+  
+      const responseData = await response.json();
+  
+      const processedData = responseData.data.map(group => ({
+        id: group.id,
+        name: group.name,
+        description: group.description || '',
+        thumbnail: group.thumbnail,
+        level: group.level,
+        topicsCount: group.topicsCount,
+        userCount: group.userCount || 0,
+      }));
+  
+      setVocabGroups(processedData);
+      await AsyncStorage.setItem('vocabGroups', JSON.stringify(processedData));
+      await AsyncStorage.setItem('lastUpdated', Date.now().toString());
     } catch (error) {
-        setError('Unable to load vocabulary groups');
+      setError('Unable to load vocabulary groups');
     }
-  };
+  };  
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -143,7 +147,7 @@ const HomeVocabScreen = () => {
           <Text style={styles.welcomeText}>Welcome back,</Text>
           <Text style={styles.headerTitle}>{username}</Text>
         </View>
-        <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity style={styles.profileButton} onPress={() => navigation.navigate('PersonalWordFolderScreen')}>
           <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']} style={styles.profileGradient}>
             <MaterialIcons name="person" size={24} color="white" />
           </LinearGradient>
@@ -191,6 +195,18 @@ const HomeVocabScreen = () => {
       ))}
     </ScrollView>
   );
+
+  const renderVocabGroups = () => (
+    <FlatList
+      data={vocabGroups.filter(group => selectedLevel === 'all' || group.level === selectedLevel)}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => renderVocabCard(item)}
+      contentContainerStyle={styles.groupList}
+      ListEmptyComponent={<Text style={styles.emptyText}>No vocabulary groups found.</Text>}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    />
+  );  
 
   const renderVocabCard = (group) => {
     return (

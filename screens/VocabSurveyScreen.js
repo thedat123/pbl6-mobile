@@ -12,7 +12,7 @@ const VocabSurveyScreen = () => {
       <View style={styles.card}>
         <Image
           style={styles.image}
-          source={require('../assets/images/Vocab/love.png')} // Ensure this path is correct
+          source={require('../assets/images/Vocab/love.png')}
         />
         <Text style={styles.word}>date (n)</Text>
         <Text style={styles.pronunciation}>/deit/</Text>

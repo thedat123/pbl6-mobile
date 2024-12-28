@@ -9,6 +9,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -26,6 +27,47 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
+const AlertModal = React.memo(({ modal, setModal }) => (
+  <Modal
+    transparent
+    visible={modal.visible}
+    animationType="fade"
+    onRequestClose={() => setModal(prev => ({ ...prev, visible: false }))}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={[styles.modalHeader, styles[`${modal.type}Header`]]}>
+          <Text style={styles.modalTitle}>{modal.title}</Text>
+        </View>
+        <View style={styles.modalBody}>
+          <Text style={styles.modalMessage}>{modal.message}</Text>
+        </View>
+        <View style={styles.modalFooter}>
+          {modal.showCancel && (
+            <TouchableOpacity 
+              style={[styles.modalButton, styles.modalCancelButton]}
+              onPress={() => setModal(prev => ({ ...prev, visible: false }))}
+            >
+              <Text style={styles.modalButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={[styles.modalButton, styles.modalConfirmButton]}
+            onPress={() => {
+              setModal(prev => ({ ...prev, visible: false }));
+              modal.onConfirm();
+            }}
+          >
+            <Text style={styles.modalButtonText}>
+              {modal.type === 'danger' ? 'Logout' : 'OK'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+));
+
 const TestBase = () => {
   const route = useRoute();
   const navigation = useNavigation();
@@ -39,6 +81,16 @@ const TestBase = () => {
   const [isNavExpanded, setIsNavExpanded] = useState(false);
   const scrollViewRef = useRef(null);
   const testPartRef = useRef({});
+  const [questionPositions, setQuestionPositions] = useState({});
+  const questionRefs = useRef({});
+  const [modal, setModal] = useState({
+      visible: false,
+      title: '',
+      message: '',
+      type: 'info',
+      onConfirm: () => {},
+      showCancel: false,
+  });
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -61,6 +113,14 @@ const TestBase = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const measureQuestionPosition = useCallback((questionId, event) => {
+    const layout = event.nativeEvent.layout;
+    setQuestionPositions(prev => ({
+      ...prev,
+      [questionId]: layout.y
+    }));
+  }, []);
+
   const handlePartQuestionStatus = (partQuestionStatus) => {
     setQuestionStatus(prev => ({
       ...prev,
@@ -71,119 +131,124 @@ const TestBase = () => {
   const handleQuestionPress = (questionId) => {
     setCurrentQuestion(questionId);
     setQuestionStatus((prev) => ({ ...prev, [questionId]: 'viewed' }));
-    scrollToTop();
+    scrollToQuestion(questionId);
+  };
+  
+  const scrollToQuestion = (questionId) => {
+    if (questionPositions[questionId] !== undefined && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        y: questionPositions[questionId],
+        animated: true
+      });
+    }
+  }; 
+
+  const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
+    setModal({ visible: true, title, message, type, showCancel, onConfirm });
   };
 
-  const scrollToTop = () => {
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-  };
-
-  const handleSubmit = async () => {
-    Alert.alert(
+  const handleSubmit = () => {
+    showAlert(
       "Submit Test",
       "Are you sure you want to submit your test?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Submit",
-          onPress: async () => {
-            try {
-              const allTestResults = selectedParts.map((part) => {
-                const partRef = testPartRef.current[part];
-                return {
-                  partName: part,
-                  answers: partRef?.getAnswers() || {},
-                  questionStatus: partRef?.getQuestionStatus() || {},
-                  duration: partRef?.getTestDuration() || 0,
-                  questionData: partRef?.getQuestionData() || [],
-                };
-              });
+      'info',
+      true,
+      async () => {
+        try {
+          const allTestResults = selectedParts.map((part) => {
+            const partRef = testPartRef.current[part];
+            return {
+              partName: part,
+              answers: partRef?.getAnswers() || {},
+              questionStatus: partRef?.getQuestionStatus() || {},
+              duration: partRef?.getTestDuration() || 0,
+              questionData: partRef?.getQuestionData() || [],
+            };
+          });
   
-              const mergedResults = {
-                answers: allTestResults.reduce((acc, part) => ({ ...acc, ...part.answers }), {}),
-                questionStatus: allTestResults.reduce((acc, part) => ({ ...acc, ...part.questionStatus }), {}),
-                duration: allTestResults.reduce((total, part) => total + part.duration, 0),
-                questionData: allTestResults.flatMap((part) => part.questionData),
-              };
+          const mergedResults = {
+            answers: allTestResults.reduce((acc, part) => ({ ...acc, ...part.answers }), {}),
+            questionStatus: allTestResults.reduce((acc, part) => ({ ...acc, ...part.questionStatus }), {}),
+            duration: allTestResults.reduce((total, part) => total + part.duration, 0),
+            questionData: allTestResults.flatMap((part) => part.questionData),
+          };
   
-              const userAnswers = Object.keys(mergedResults.answers).map((questionId) => ({
-                idQuestion: questionId,
-                answer: mergedResults.answers[questionId],
-              }));
+          const userAnswers = Object.keys(mergedResults.answers).map((questionId) => ({
+            idQuestion: questionId,
+            answer: mergedResults.answers[questionId],
+          }));
   
-              const numCorrect = mergedResults.questionData.reduce((count, question) => {
-                const userAnswer = mergedResults.answers[question.id];
-                return userAnswer === question.correctAnswer ? count + 1 : count;
-              }, 0);
+          const numCorrect = mergedResults.questionData.reduce((count, question) => {
+            const userAnswer = mergedResults.answers[question.id];
+            return userAnswer === question.correctAnswer ? count + 1 : count;
+          }, 0);
   
-              const userId = await AsyncStorage.getItem("userId");
-              if (!userId) {
-                throw new Error("Authentication userId not found. Please log in again.");
-              }
+          const userId = await AsyncStorage.getItem("userId");
+          if (!userId) {
+            throw new Error("Authentication userId not found. Please log in again.");
+          }
   
-              const dataToSend = {
-                userId,
-                testId,
-                time: mergedResults.duration,
-                userAnswer: userAnswers,
-                isFullTest: true,
-              };
+          const dataToSend = {
+            userId,
+            testId,
+            time: mergedResults.duration,
+            userAnswer: userAnswers,
+            isFullTest: true,
+          };
   
-              const token = await AsyncStorage.getItem("token");
-              if (!token) {
-                throw new Error("Authentication token not found. Please log in again.");
-              }
+          const token = await AsyncStorage.getItem("token");
+          if (!token) {
+            throw new Error("Authentication token not found. Please log in again.");
+          }
   
-              const response = await axios.post(`${API_BASE_URL}:3001/api/v1/test-practice`, dataToSend, {
-                headers: {
-                  "Authorization": `Bearer ${token}`,
-                  "Content-Type": "application/json",
-                },
-              });
+          const response = await axios.post(`${API_BASE_URL}:3001/api/v1/test-practice`, dataToSend, {
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
   
-              console.log(response);
-              if (response.status === 201) {
-                const testPracticeId = response.data.id;
+          console.log(response);
+          if (response.status === 201) {
+            const testPracticeId = response.data.id;
   
-                const testPracticeResponse = await axios.get(`${API_BASE_URL}:3001/api/v1/test-practice/${testPracticeId}`, {
-                  headers: {
-                    "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json",
+            const testPracticeResponse = await axios.get(`${API_BASE_URL}:3001/api/v1/test-practice/${testPracticeId}`, {
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+  
+            if (testPracticeResponse.status === 200 && testPracticeResponse.data) {
+              const testPractice = testPracticeResponse.data.testPractice;
+              navigation.navigate("TestDetailResult", {
+                result: {
+                  ...mergedResults,
+                  numCorrect: testPractice.numCorrect,
+                  totalQuestion: testPractice.totalQuestion,
+                  LCScore: testPractice.LCScore,
+                  RCScore: testPractice.RCScore,
+                  testPracticeId: testPractice.id,
+                  user: testPractice.user,
+                  test: {
+                    ...testPractice.test,
+                    selectedParts,
                   },
-                });
-  
-                if (testPracticeResponse.status === 200 && testPracticeResponse.data) {
-                  const testPractice = testPracticeResponse.data.testPractice;
-                  navigation.navigate("TestDetailResult", {
-                    result: {
-                      ...mergedResults,
-                      numCorrect: testPractice.numCorrect,
-                      totalQuestion: testPractice.totalQuestion,
-                      LCScore: testPractice.LCScore,
-                      RCScore: testPractice.RCScore,
-                      testPracticeId: testPractice.id,
-                      user: testPractice.user,
-                      test: {
-                        ...testPractice.test,
-                        selectedParts, // Add selected parts here
-                      },
-                      userAnswers: testPractice.userAnswers,
-                      time: mergedResults.duration,
-                    },
-                  });                  
-                } else {
-                  throw new Error("Failed to fetch detailed test practice data.");
-                }
-              } else {
-                throw new Error("Failed to submit test practice or invalid response format.");
-              }
-            } catch (error) {
-              console.error("Error:", error);
-              Alert.alert("Error", error.message || "An unknown error occurred.");
+                  userAnswers: testPractice.userAnswers,
+                  time: mergedResults.duration,
+                },
+              });                  
+            } else {
+              throw new Error("Failed to fetch detailed test practice data.");
             }
-          },
-        },
-      ]
+          } else {
+            throw new Error("Failed to submit test practice or invalid response format.");
+          }
+        } catch (error) {
+          console.error("Error:", error);
+          showAlert("Error", error.message || "An unknown error occurred.", "danger");
+        }
+      }
     );
   };  
   
@@ -234,11 +299,13 @@ const TestBase = () => {
   const getAllQuestions = () => {
     const allQuestions = selectedParts.flatMap(part => {
       const partData = testPartRef.current[part]?.getQuestionData() || [];
-
-      return partData.flatMap(p => p.questions || []);
+  
+      return partData.flatMap(p => p.questions ? p.questions : []);
     }).filter(Boolean);
+  
     return allQuestions;
   };
+  
 
   const renderCurrentPart = () => {
     const partComponentMap = {
@@ -258,6 +325,8 @@ const TestBase = () => {
         ref={(ref) => (testPartRef.current[currentPart] = ref)}
         onQuestionStatusChange={handlePartQuestionStatus}
         testId={testId}
+        onQuestionLayout={measureQuestionPosition}
+        questionRefs={questionRefs}
       />
     );
   };
@@ -293,6 +362,7 @@ const TestBase = () => {
         <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
           <Text style={styles.submitBtnText}>Nộp bài</Text>
         </TouchableOpacity>
+        <AlertModal modal={modal} setModal={setModal} />
       </View>
     </SafeAreaView>
   );
@@ -438,7 +508,85 @@ const styles = {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    padding: 20,
+    alignItems: 'center',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  modalHeaderError: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderSuccess: {
+    backgroundColor: '#34A853',
+  },
+  modalHeaderDanger: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderWarning: {
+    backgroundColor: '#FBBC04',
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 24,
+    backgroundColor: '#fff',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8EAED',
+  },
+  modalButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#34A853',
+  },
+  modalCancelButton: {
+    backgroundColor: '#EA4335',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 };
 
 export default TestBase;

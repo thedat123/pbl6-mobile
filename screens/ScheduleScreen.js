@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
   Platform,
+  Modal,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -161,27 +162,60 @@ const ScheduleScreen = () => {
     setDaysUntilExam(days);
   };
 
-  const showAlert = (title, message, type) => {
-    setModal({
-      visible: true,
-      title,
-      message,
-      type,
-      showCancel: false,
-      onConfirm: () => setModal({ ...modal, visible: false }), // Close the modal
-    });
+  const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
+    setModal({ visible: true, title, message, type, showCancel, onConfirm });
   };
+
+  const AlertModal = () => (
+      <Modal
+        transparent
+        visible={modal.visible}
+        animationType="fade"
+        onRequestClose={() => setModal(prev => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={[styles.modalHeader, styles[`${modal.type}Header`]]}>
+              <Text style={styles.modalTitle}>{modal.title}</Text>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={styles.modalMessage}>{modal.message}</Text>
+            </View>
+            <View style={styles.modalFooter}>
+              {modal.showCancel && (
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.modalCancelButton]}
+                  onPress={() => setModal(prev => ({ ...prev, visible: false }))}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={() => {
+                  setModal(prev => ({ ...prev, visible: false }));
+                  modal.onConfirm();
+                }}
+              >
+                <Text style={styles.modalButtonText}>
+                  {modal.type === 'danger' ? 'Logout' : 'OK'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
 
   const updateProfile = async (targetScore, testDate) => {
     try {
       const token = await AsyncStorage.getItem('token');
       console.log(token);
       if (!token) {
-        Alert.alert('Error', 'You need to be logged in to update your profile.');
+        showAlert('Error', 'You need to be logged in to update your profile.', 'error');
         return;
       }
   
-      // Ensure testDate is a Date object and convert to ISO string
       const formattedTestDate = testDate instanceof Date ? testDate.toISOString() : new Date(testDate).toISOString();
   
       const response = await axios.patch(`${API_BASE_URL}:3001/api/v1/users/updateProfile`, {
@@ -194,7 +228,6 @@ const ScheduleScreen = () => {
         },
       });
   
-      console.log('Profile updated successfully:', response.data);
       showAlert(
         'Success',
         'Your target score and exam date have been updated successfully!',
@@ -202,24 +235,18 @@ const ScheduleScreen = () => {
       );
     } catch (error) {
       if (error.response) {
-        // Server responded with a non-2xx status
-        console.error('Failed to update profile:', error.response.data);
         showAlert(
           'Error',
           `Failed to update profile: ${error.response.data.message || 'Unknown error'}`,
           'error'
         );
       } else if (error.request) {
-        // No response was received from the server
-        console.error('No response from server:', error.request);
         showAlert(
           'Error',
           'No response from the server. Please check your network connection.',
           'error'
         );
       } else {
-        // Something else went wrong
-        console.error('Error updating profile:', error.message);
         showAlert(
           'Error',
           'An error occurred while updating your profile. Please try again.',
@@ -233,10 +260,11 @@ const ScheduleScreen = () => {
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Permission Required',
           'Please enable notifications to receive study reminders',
-          [{ text: 'OK' }]
+          [{ text: 'OK' }],
+          'error'
         );
       }
     } catch (error) {
@@ -247,7 +275,7 @@ const ScheduleScreen = () => {
   const handleNotificationResponse = (response) => {
     const { notification } = response;
     const { title, body } = notification.request.content;
-    Alert.alert('Notification Tapped', `Title: ${title}\nMessage: ${body}`);
+    showAlert('Notification Tapped', `Title: ${title}\nMessage: ${body}`, 'success');
   };
 
   const scheduleNotifications = async () => {
@@ -255,7 +283,7 @@ const ScheduleScreen = () => {
       await Notifications.cancelAllScheduledNotificationsAsync();
   
       if (!isNotificationEnabled) {
-        Alert.alert('Reminder Disabled', 'You have disabled the reminders.');
+        showAlert('Reminder Disabled', 'You have disabled the reminders.', 'success');
         return;
       }
   
@@ -300,10 +328,7 @@ const ScheduleScreen = () => {
   
           // Nếu thời gian cụ thể đã qua, báo lỗi
           if (specificTriggerTime <= now) {
-            Alert.alert(
-              'Invalid Time',
-              'The specific reminder must be set for a future date and time.'
-            );
+            showAlert('Invalid Time', 'The specific reminder must be set for a future date and time.', 'error');
             return;
           }
   
@@ -312,7 +337,7 @@ const ScheduleScreen = () => {
         }
   
         default:
-          Alert.alert('Error', 'Invalid reminder mode selected.');
+          showAlert('Error', 'Invalid reminder mode selected.', 'error');
           return;
       }
   
@@ -325,13 +350,9 @@ const ScheduleScreen = () => {
         },
         trigger, // Đặt trigger chính xác
       });
-  
-      Alert.alert(
-        'Success',
-        `${reminderMode.charAt(0).toUpperCase() + reminderMode.slice(1)} reminder has been scheduled!`
-      );
+      showAlert('Success', `${reminderMode.charAt(0).toUpperCase() + reminderMode.slice(1)} reminder has been scheduled!`, 'success');
     } catch (error) {
-      Alert.alert('Error', 'Failed to schedule notifications');
+      showAlert('Error', 'Failed to schedule notifications', 'error');
       console.error(error);
     }
   };  
@@ -387,7 +408,6 @@ const ScheduleScreen = () => {
         <Text style={styles.headerTitle}>TOEIC Study Planner</Text>
       </View>
 
-      {/* Exam Date and Countdown Section */}
       <View style={styles.card}>
         {daysUntilExam !== null && (
           <View style={styles.countdownContainer}>
@@ -439,6 +459,8 @@ const ScheduleScreen = () => {
           </TouchableOpacity>
         </View>
 
+        <AlertModal />
+
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -480,7 +502,6 @@ const ScheduleScreen = () => {
                 ))}
               </View>
 
-              {/* Daily Reminder Settings */}
               {reminderMode === 'daily' && (
                 <View style={styles.reminderSettings}>
                   <Text style={styles.settingsLabel}>Daily Reminder Time</Text>
@@ -494,7 +515,6 @@ const ScheduleScreen = () => {
                 </View>
               )}
 
-              {/* Weekly Reminder Settings */}
               {reminderMode === 'weekly' && (
                 <View style={styles.reminderSettings}>
                   <Text style={styles.settingsLabel}>Weekly Reminder Day & Time</Text>
@@ -527,7 +547,6 @@ const ScheduleScreen = () => {
                 </View>
               )}
 
-              {/* Specific Date Reminder Settings */}
               {reminderMode === 'specific' && (
                 <View style={styles.reminderSettings}>
                   <Text style={styles.settingsLabel}>Specific Date & Time</Text>
@@ -567,7 +586,6 @@ const ScheduleScreen = () => {
         </View>
       </View>
 
-      {/* Date/Time Pickers */}
       {showDatePicker && (
         <DateTimePicker
           value={examDate}
@@ -851,6 +869,85 @@ const styles = StyleSheet.create({
   },
   scheduleButtonText: {
     color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    padding: 20,
+    alignItems: 'center',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  modalHeaderError: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderSuccess: {
+    backgroundColor: '#34A853',
+  },
+  modalHeaderDanger: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderWarning: {
+    backgroundColor: '#FBBC04',
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 24,
+    backgroundColor: '#fff',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8EAED',
+  },
+  modalButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#34A853',
+  },
+  modalCancelButton: {
+    backgroundColor: '#EA4335',
+  },
+  modalButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },

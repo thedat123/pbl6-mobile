@@ -35,13 +35,20 @@ const PracticeMode = () => {
       if (response.data) {
         const testData = response.data;
   
+        const partsResponse = await axios.get(`${API_BASE_URL}:3001/api/v1/part`);
+        const allParts = partsResponse.data;
+  
         const availableParts = testData.groupQuestions.reduce((acc, group) => {
-          if (group.part?.key && !acc.some(part => part.key === group.part.key)) {
-            acc.push({
-              key: group.part.key,
-              name: `Part ${group.part.key.replace('part', '')}`,
-              totalQuestion: group.questions?.length || 0,
-            });
+          if (group.part?.key) {
+            const matchingPart = allParts.find(part => part.key === group.part.key);
+  
+            if (matchingPart && !acc.some(part => part.key === matchingPart.key)) {
+              acc.push({
+                key: matchingPart.key,
+                name: matchingPart.name,
+                totalQuestion: matchingPart.totalQuestion,
+              });
+            }
           }
           return acc;
         }, []);
@@ -54,7 +61,7 @@ const PracticeMode = () => {
     } catch (error) {
       console.error('Error fetching parts:', error.message);
     }
-  }, [id]);  
+  }, [id]);    
 
   useEffect(() => {
     fetchParts(); 

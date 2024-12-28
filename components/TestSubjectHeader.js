@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 const TestSubjectHeader = ({ activeTab, onTabChange, test }) => {
+  const navigation = useNavigation();
   const [active, setActive] = useState(activeTab || 'info');
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -27,10 +29,10 @@ const TestSubjectHeader = ({ activeTab, onTabChange, test }) => {
 
   const handleTabChange = (tabId) => {
     setActive(tabId);
-    if (tabId === 'info') {
-      onTabChange('Practice');  
+    if (tabId === 'answers') {
+      navigation.navigate('AnswerTranscriptScreen', { test: test });
     } else {
-      onTabChange(tabId);  
+      onTabChange('Practice');
     }
   };
 
@@ -45,7 +47,6 @@ const TestSubjectHeader = ({ activeTab, onTabChange, test }) => {
             </View>
           </View>
 
-          {/* "View More" functionality */}
           {isExpanded && (
             <>
               <Text style={styles.title}>{test.name}</Text>

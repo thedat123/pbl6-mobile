@@ -51,7 +51,6 @@ const SettingsScreen = ({ navigation }) => {
     showCancel: false,
   });
 
-  // Effects
   useEffect(() => {
     loadUserData();
   }, []);
@@ -123,7 +122,6 @@ const SettingsScreen = ({ navigation }) => {
 
   const updateProfile = async () => {
     setIsLoading(true);
-    loadUserData();
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) throw new Error('No authentication token');
@@ -136,7 +134,6 @@ const SettingsScreen = ({ navigation }) => {
       });
   
       const data = await response.json();
-      console.log('User Data:', data);
   
       const updateFields = {};
       if (formData.fullName && formData.fullName !== '' && formData.fullName !== data?.name) {
@@ -148,13 +145,38 @@ const SettingsScreen = ({ navigation }) => {
       if (formData.phone && formData.phone !== '' && formData.phone !== data?.phone) {
         updateFields.phone = formData.phone;
       }
-      
-      if (formData.avatar && formData.avatar !== DEFAULT_AVATAR && typeof formData.avatar === 'string') {
-        updateFields.avatar = formData.avatar;
+  
+      if (formData.avatar) {
+        if (formData.avatar.includes('res.cloudinary.com')) {
+          const publicIdMatch = formData.avatar.match(/\/v\d+\/([^.]+)\./);
+          if (publicIdMatch && publicIdMatch[1]) {
+            if (formData.avatar !== data.avatar) {
+              updateFields.avatar = await convertToBase64(formData.avatar);
+            }
+          } else {
+            console.error('Could not extract public ID from Cloudinary URL');
+          }
+        } 
+        else if (formData.avatar.startsWith('file://') || formData.avatar.startsWith('data:')) {
+          try {
+            const base64Image = formData.avatar.startsWith('file://') 
+              ? await convertToBase64(formData.avatar) 
+              : formData.avatar;
+            
+            if (base64Image !== data.avatar) {
+              updateFields.avatar = base64Image;
+            }
+          } catch (conversionError) {
+            showAlert('Error', 'Failed to process avatar image', 'error');
+            setIsLoading(false);
+            return;
+          }
+        }
       }
   
       if (Object.keys(updateFields).length === 0) {
         showAlert('No Changes', 'No changes were made to your profile.', 'info');
+        setIsLoading(false);
         return;
       }
   
@@ -169,7 +191,7 @@ const SettingsScreen = ({ navigation }) => {
   
       if (!updateResponse.ok) {
         const errorData = await updateResponse.json();
-        console.error('Error details:', errorData); // Log the error details from the response
+        console.error('Error details:', errorData);
         throw new Error(errorData.message || 'Failed to update profile');
       }
   
@@ -188,9 +210,8 @@ const SettingsScreen = ({ navigation }) => {
     } finally {
       setIsLoading(false);
     }
-  };      
+  };        
     
-  // UI Helper Functions
   const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
     setModal({ visible: true, title, message, type, showCancel, onConfirm });
   };
@@ -218,22 +239,46 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  const handleProfileImageChange = (newImageUri) => {
-    // Ensure newImageUri is a valid string
-    if (typeof newImageUri === 'string' && newImageUri !== '') {
-      setProfileImage({ uri: newImageUri });
-    
-      setFormData((prevData) => ({
-        ...prevData,
-        avatar: newImageUri, 
-      }));
-    } else {
-      setProfileImage(DEFAULT_AVATAR);
-      
-      setFormData((prevData) => ({
-        ...prevData,
-        avatar: DEFAULT_AVATAR, 
-      }));
+  const convertToBase64 = async (imageUri) => {
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const reader = new FileReader();
+    return new Promise((resolve, reject) => {
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+  
+  const handleProfileImageChange = async (newImageUri) => {
+    try {
+      if (typeof newImageUri === 'string' && newImageUri !== '') {
+        // If it's an HTTP URL, just set it directly
+        if (newImageUri.startsWith('http')) {
+          setProfileImage({ uri: newImageUri });
+          setFormData((prevData) => ({
+            ...prevData,
+            avatar: newImageUri,
+          }));
+        } 
+        // If it's a local file, convert to Base64
+        else if (newImageUri.startsWith('file://')) {
+          const base64Image = await convertToBase64(newImageUri);
+          setProfileImage({ uri: base64Image });
+          setFormData((prevData) => ({
+            ...prevData,
+            avatar: base64Image,
+          }));
+        }
+      } else {
+        setProfileImage(DEFAULT_AVATAR);
+        setFormData((prevData) => ({
+          ...prevData,
+          avatar: DEFAULT_AVATAR,
+        }));
+      }
+    } catch (error) {
+      showAlert('Error', 'Failed to convert image to Base64', 'error');
     }
   };
 
@@ -257,7 +302,6 @@ const SettingsScreen = ({ navigation }) => {
     );
   };
 
-  // UI Components
   const StatButton = ({ icon, title, color, onPress }) => (
     <TouchableOpacity 
       style={[styles.statButton, { backgroundColor: color }]}
@@ -325,14 +369,12 @@ const SettingsScreen = ({ navigation }) => {
           >
           <SafeAreaView style={styles.container}>
             <ScrollView>
-              {/* Header Section */}
               <View style={styles.header}>
                 <Image 
                   source={require('../assets/images/Settings/backgroundSettings.png')} 
                   style={styles.coverImage} 
                 />
                 
-                {/* Profile Image */}
                 <View style={styles.profileSection}>
                   <View style={styles.profileImageContainer}>
                     <Image source={profileImage} style={styles.profileImage} />
@@ -342,7 +384,6 @@ const SettingsScreen = ({ navigation }) => {
                   </View>
                 </View>
 
-                {/* Quick Action Buttons */}
                 <View style={styles.statButtonsContainer}>
                   <StatButton
                     icon={<MaterialIcons name="analytics" size={28} color="#FFF" />}
@@ -359,7 +400,6 @@ const SettingsScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Tab Navigation */}
               <View style={styles.tabs}>
                 {['Profile', 'Password'].map(tab => (
                   <TouchableOpacity
@@ -379,7 +419,6 @@ const SettingsScreen = ({ navigation }) => {
                 ))}
               </View>
 
-              {/* Form Content */}
               <View style={styles.formContent}>
               {activeTab === 'Profile' ? (
           <>
@@ -455,7 +494,6 @@ const SettingsScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* Logout Button */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <MaterialIcons name="logout" size={24} color="#EA4335" />

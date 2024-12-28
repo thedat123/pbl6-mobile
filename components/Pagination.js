@@ -34,7 +34,7 @@ const Pagination = ({ totalItems, itemsPerPage, currentPage, onPageChange }) => 
         onPress={() => currentPage > 1 && onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
       >
-        <FontAwesome5 name="chevron-left" size={16} color={currentPage === 1 ? '#ccc' : '#4CAF50'} />
+        <FontAwesome5 name="chevron-left" size={16} color={currentPage === 1 ? '#ccc' : '#007AFF'} />
       </TouchableOpacity>
 
       <View style={styles.pageNumbersContainer}>
@@ -44,7 +44,7 @@ const Pagination = ({ totalItems, itemsPerPage, currentPage, onPageChange }) => 
             onPress={() => onPageChange(page)}
           >
             <LinearGradient
-              colors={currentPage === page ? ['#4CAF50', '#81C784'] : ['#ffffff', '#f8f9fa']}
+              colors={currentPage === page ? ['#1E90FF', '#00BFFF'] : ['#ffffff', '#f8f9fa']}
               style={[styles.pageButton, currentPage === page && styles.activePageButton]}
             >
               <Text style={[styles.pageText, currentPage === page && styles.activePageText]}>
@@ -60,7 +60,7 @@ const Pagination = ({ totalItems, itemsPerPage, currentPage, onPageChange }) => 
         onPress={() => currentPage < totalPages && onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
       >
-        <FontAwesome5 name="chevron-right" size={16} color={currentPage === totalPages ? '#ccc' : '#4CAF50'} />
+        <FontAwesome5 name="chevron-right" size={16} color={currentPage === totalPages ? '#ccc' : '#007AFF'} />
       </TouchableOpacity>
     </View>
   );

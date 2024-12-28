@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import WordContent from '../components/WordContent';
 import { API_BASE_URL } from '@env';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -19,7 +20,12 @@ const QUESTION_TYPES = [
   'multiple-choice-definition',   
   'multiple-choice-example',     
   'multiple-choice-pronunciation', 
-  'multiple-choice-image',       
+  'multiple-choice-image',  
+  'writing-translate',   
+  'writing-definition',   
+  'writing-example',     
+  'writing-pronunciation', 
+  'writing-image',     
 ];
 
 const VocabTestScreen = ({ route }) => {
@@ -29,6 +35,7 @@ const VocabTestScreen = ({ route }) => {
   const [progress, setProgress] = useState(0);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentIdQuestion, setCurrentIdQuestion] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -49,6 +56,9 @@ const VocabTestScreen = ({ route }) => {
   const [selectedWord, setSelectedWord] = useState([]);
   const [answered, setAnswered] = useState(false);
   const soundRef = useRef(null);
+
+  const [startTime, setStartTime] = useState(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
     const imagePaths = [
       require('../assets/images/Vocab/voca-persons/1/correct.gif'),
@@ -127,7 +137,7 @@ const VocabTestScreen = ({ route }) => {
           { uri: exampleAudioUri },
           { shouldPlay: true }
         );
-        soundRef.current = sound; // Store sound in the ref
+        soundRef.current = sound;
 
         sound.setOnPlaybackStatusUpdate((status) => {
           if (status.didJustFinish) {
@@ -140,95 +150,229 @@ const VocabTestScreen = ({ route }) => {
     }
   };
 
+  useEffect(() => {
+    if (questions.length > 0 && !startTime) {
+      setStartTime(Date.now());
+    }
+  }, [questions]);
+
   const generateQuestions = (data) => {
-    return data.map((wordData) => {
-      const allWords = data.map((item) => item.word);
-      const incorrectAnswers = allWords
-        .filter((option) => option !== wordData.word)
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 3);
+    const allQuestions = data.map((wordData) => {
+        const allWords = data.map((item) => item.word);
+        const incorrectAnswers = allWords
+            .filter((option) => option !== wordData.word)
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 3);
 
-      while (incorrectAnswers.length < 3) {
-        incorrectAnswers.push("Alternative Word");
-      }
+        while (incorrectAnswers.length < 3) {
+            incorrectAnswers.push("Alternative Word");
+        }
 
-      const questionType = QUESTION_TYPES[Math.floor(Math.random() * QUESTION_TYPES.length)];
+        const questionTypes = QUESTION_TYPES.slice(); // Copy to avoid modifying the original array
+        let multipleChoiceQuestion = null;
+        let writingQuestion = null;
 
-      switch (questionType) {
-        case 'multiple-choice-translate':
-          return {
-            text: "Choose the correct translation for this word",
-            word: `${wordData.word} (${wordData.wordClass})`,
-            options: [wordData.translate, ...incorrectAnswers.map(w => data.find(d => d.word === w)?.translate || "Alternative Translation")].sort(() => Math.random() - 0.5),
-            correctAnswer: wordData.translate,
-            current: wordData.word,
-            type: "multiple-choice",
-            questionType: questionType,
-            audioUri: wordData.audio,
-          };
+        // Generate at least one multiple-choice question
+        const generateMultipleChoice = (type) => {
+            switch (type) {
+                case 'multiple-choice-translate':
+                    if (wordData.translate) {
+                        return {
+                            id: wordData.id,
+                            text: "Choose the correct translation for this word",
+                            word: `${wordData.word} (${wordData.wordClass})`,
+                            options: [wordData.translate, ...incorrectAnswers.map(w => data.find(d => d.word === w)?.translate || "Alternative Translation")].sort(() => Math.random() - 0.5),
+                            correctAnswer: wordData.translate,
+                            current: wordData.word,
+                            type: "multiple-choice",
+                            questionType: 'multiple-choice-translate',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
 
-        case 'multiple-choice-definition':
-          return {
-            text: "Choose the word that matches this definition",
-            word: wordData.definition,
-            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
-            correctAnswer: wordData.word,
-            current: wordData.word,
-            type: "multiple-choice",
-            questionType: questionType,
-            audioUri: wordData.audio,
-          };
+                case 'multiple-choice-definition':
+                    if (wordData.definition) {
+                        return {
+                            id: wordData.id,
+                            text: "Choose the word that matches this definition",
+                            word: wordData.definition,
+                            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "multiple-choice",
+                            questionType: 'multiple-choice-definition',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
 
-        case 'multiple-choice-example':
-          return {
-            text: "Choose the word used in this example",
-            word: wordData.example,
-            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
-            correctAnswer: wordData.word,
-            current: wordData.word,
-            type: "multiple-choice",
-            questionType: questionType,
-            audioUri: wordData.audio,
-          };
+                case 'multiple-choice-example':
+                    if (wordData.example) {
+                        return {
+                            id: wordData.id,
+                            text: "Choose the word used in this example",
+                            word: wordData.example,
+                            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "multiple-choice",
+                            questionType: 'multiple-choice-example',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
 
-        case 'multiple-choice-pronunciation':
-          return {
-            text: "Choose the word with this pronunciation",
-            word: wordData.pronunciation,
-            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
-            correctAnswer: wordData.word,
-            current: wordData.word,
-            type: "multiple-choice",
-            questionType: questionType,
-            audioUri: wordData.audio,
-          };
+                case 'multiple-choice-pronunciation':
+                    if (wordData.pronunciation) {
+                        return {
+                            id: wordData.id,
+                            text: "Choose the word with this pronunciation",
+                            word: wordData.pronunciation,
+                            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "multiple-choice",
+                            questionType: 'multiple-choice-pronunciation',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
 
-        case 'multiple-choice-image':
-          return {
-            text: "Choose the word that matches this image",
-            word: wordData.thumbnail,
-            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
-            correctAnswer: wordData.word,
-            current: wordData.word,
-            type: "multiple-choice",
-            questionType: questionType,
-            audioUri: wordData.audio,
-          };
+                case 'multiple-choice-image':
+                    if (wordData.thumbnail) {
+                        return {
+                            id: wordData.id,
+                            text: "Choose the word that matches this image",
+                            word: wordData.thumbnail,
+                            options: [wordData.word, ...incorrectAnswers].sort(() => Math.random() - 0.5),
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "multiple-choice",
+                            questionType: 'multiple-choice-image',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
 
-        default:
-          return {
-            text: "Choose the correct translation",
-            word: `${wordData.word} (${wordData.wordClass})`,
-            options: [wordData.translate, ...incorrectAnswers.map(w => data.find(d => d.word === w)?.translate || "Alternative Translation")].sort(() => Math.random() - 0.5),
-            correctAnswer: wordData.translate,
-            current: wordData.word,
-            type: "multiple-choice",
-            questionType: 'multiple-choice-translate',
-            audioUri: wordData.audio,
-          };
-      }
-    });
+                default:
+                    return null;
+            }
+        };
+
+        // Generate at least one writing question
+        const generateWriting = (type) => {
+            switch (type) {
+                case 'writing-translate':
+                    if (wordData.translate) {
+                        return {
+                            id: wordData.id,
+                            text: "Write the word matched this translation",
+                            word: wordData.translate,
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "writing",
+                            questionType: 'writing-translate',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
+
+                case 'writing-definition':
+                    if (wordData.definition) {
+                        return {
+                            id: wordData.id,
+                            text: "Write the word that matches this definition",
+                            word: wordData.definition,
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "writing",
+                            questionType: 'writing-definition',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
+
+                case 'writing-example':
+                    if (wordData.example) {
+                        return {
+                            id: wordData.id,
+                            text: "Write the word that matches this example",
+                            word: wordData.example,
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "writing",
+                            questionType: 'writing-example',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
+
+                case 'writing-pronunciation':
+                    if (wordData.pronunciation) {
+                        return {
+                            id: wordData.id,
+                            text: "Write the word that matches this pronunciation",
+                            word: wordData.pronunciation,
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "writing",
+                            questionType: 'writing-pronunciation',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
+
+                case 'writing-image':
+                    if (wordData.image) {
+                        return {
+                            id: wordData.id,
+                            text: "Write the word that matches this image",
+                            word: wordData.image,
+                            correctAnswer: wordData.word,
+                            current: wordData.word,
+                            type: "writing",
+                            questionType: 'writing-image',
+                            audioUri: wordData.audio,
+                        };
+                    }
+                    return null;
+
+                default:
+                    return null;
+            }
+        };
+
+        // Ensure we generate one question of each type
+        questionTypes.forEach((type) => {
+            if (!multipleChoiceQuestion) {
+                multipleChoiceQuestion = generateMultipleChoice(type);
+            }
+            if (!writingQuestion) {
+                writingQuestion = generateWriting(type);
+            }
+        });
+
+        // If a question type doesn't exist, fallback to another type.
+        if (!multipleChoiceQuestion) {
+            multipleChoiceQuestion = generateMultipleChoice(QUESTION_TYPES[Math.floor(Math.random() * QUESTION_TYPES.length)]);
+        }
+        if (!writingQuestion) {
+            writingQuestion = generateWriting(QUESTION_TYPES[Math.floor(Math.random() * QUESTION_TYPES.length)]);
+        }
+
+        return [multipleChoiceQuestion, writingQuestion];
+    }).flat();
+
+    // Remove null questions before returning
+    const validQuestions = allQuestions.filter(q => q !== null);
+
+    // Shuffle the questions
+    const shuffledQuestions = validQuestions.sort(() => Math.random() - 0.5);
+    return shuffledQuestions;
   };
+
+
 
   useEffect(() => {
     Animated.timing(progressAnimation, {
@@ -247,25 +391,78 @@ const VocabTestScreen = ({ route }) => {
   }, []);   
 
   useEffect(() => {
+    if (currentQuestionIndex < questions.length) {
+      setCurrentIdQuestion(questions[currentQuestionIndex].id);
+    }
+  }, [currentQuestionIndex, questions]);  
+
+  useEffect(() => {
     const fetchQuestions = async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}:3001/api/v1/topic/${topicId}`);
-        const data = response.data.listWord;
+          try {
+              const response = await axios.get(`${API_BASE_URL}:3001/api/v1/topic/${topicId}`);
+              const data = response.data.listWord;
 
-        const generatedQuestions = generateQuestions(data);
+              if (data && data.length > 0) {
+                  const generatedQuestions = generateQuestions(data);
 
-        setQuestions(generatedQuestions);
-        setTotalQuestions(generatedQuestions.length);
-        setTopicName(response.data.name);
-        setSelectedWord(data);
-        setLoading(false);
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-        Alert.alert("Error", "Unable to load test questions. Please try again later.");
-      }
-    };
+                  setQuestions(generatedQuestions);
+                  setTotalQuestions(generatedQuestions.length);
+                  setTopicName(response.data.name);
 
-    fetchQuestions();
+                  const alignedSelectedWord = generatedQuestions.map((question) =>
+                      data.find((d) => d.word === question.current)
+                  );
+
+                  setSelectedWord(alignedSelectedWord);
+              } else {
+                  const token = await AsyncStorage.getItem('token');
+                  console.log(topicId);
+                  const fallbackResponse = await axios.get(
+                      `${API_BASE_URL}:3001/api/v1/user-topic/${topicId}`,
+                      {
+                        method: 'GET',
+                        headers: {
+                          'Authorization': `Bearer ${token}`,
+                          'Content-Type': 'application/json',
+                        }
+                      }
+                  );
+
+                  const fallbackData = fallbackResponse.data[0].words; // Extract words array
+                  const topicName = fallbackResponse.data[0].name; // Extract topic name
+                  setTopicName(topicName); // Set topic name in state
+
+                  // Process words and generate questions if words exist
+                  if (fallbackData && fallbackData.length > 0) {
+                    // Generate questions based on words
+                    const generatedQuestions = generateQuestions(fallbackData);
+
+                    setQuestions(generatedQuestions); // Set questions in state
+                    setTotalQuestions(generatedQuestions.length); // Set total number of questions
+
+                    // Align selected words with the generated questions
+                    const alignedSelectedWord = generatedQuestions.map((question) =>
+                      fallbackData.find((word) => word.word === question.current)
+                    );
+
+                    setSelectedWord(alignedSelectedWord); // Set aligned words in state
+                  } else {
+                    throw new Error("No words found in fallback API.");
+                  }
+              }
+
+              setLoading(false);
+          } catch (error) {
+              console.error("Failed to fetch data:", error);
+              Alert.alert(
+                  "Error",
+                  "Unable to load test questions. Please try again later."
+              );
+              setLoading(false);
+          }
+      };
+
+      fetchQuestions();
   }, [topicId]);
 
   const currentQuestion = questions[currentQuestionIndex];
@@ -296,18 +493,23 @@ const VocabTestScreen = ({ route }) => {
     
     setProgress((prev) => Math.min(prev + 1 / totalQuestions, 1));
     setShowCorrectAnswer(true);
-    setAnswered(true);
+    setTimeout(() => {
+      setAnswered(true);
+    
+      setTimeout(() => {
+        moveToNextQuestion();
+      }, 2000);
+    }, 2000); 
   
     setResults((prevResults) => [
       ...prevResults,
-      { questionIndex: currentQuestionIndex, isCorrect },
+      { currentIdQuestion: currentIdQuestion, questionIndex: currentQuestionIndex, isCorrect },
     ]);
   
     const imagePath = isCorrect ? imagePaths[currentImageIndex] : failImagePaths[currentImageIndex];
     setImageSource(imagePath);
   
     try {
-      // Play sound for correct or incorrect answer
       const soundFile = isCorrect ? require('../assets/audio/right_answer.mp3') : require('../assets/audio/wrong_answer.mp3');
       const { sound } = await Audio.Sound.createAsync(soundFile, { shouldPlay: true });
       tickSound.current = sound;
@@ -323,8 +525,7 @@ const VocabTestScreen = ({ route }) => {
       console.error("Error handling answer sound:", error);
     }
   };
-     
-      
+    
   const handleTimeOut = () => {
     if (isAnswerSubmitted.current) return;
     isAnswerSubmitted.current = true;
@@ -338,7 +539,7 @@ const VocabTestScreen = ({ route }) => {
   const moveToNextQuestion = () => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
-      timerRef.current = null;  
+      timerRef.current = null;
     }
   
     animateTransition();
@@ -354,23 +555,21 @@ const VocabTestScreen = ({ route }) => {
       isAnswerSubmitted.current = false;
       setAnswered(false);
     } else {
+      const endTime = Date.now();
+      const totalTime = Math.floor((endTime - startTime) / 1000); // in seconds
+      setElapsedTime(totalTime);
+  
       setTimeout(() => {
         navigation.navigate("VocabResultScreen", {
           topicId,
           results,
           totalQuestions,
           topicName,
+          totalTime, 
         });
       }, 500);
     }
-  };  
-
-  useEffect(() => {
-    if (showCorrectAnswer) {
-      const timer = setTimeout(() => moveToNextQuestion(), 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [showCorrectAnswer]);
+  };
 
   useEffect(() => {
     setResults([]); 
@@ -492,7 +691,6 @@ const VocabTestScreen = ({ route }) => {
                    </View>
                 </Animated.View>
   
-                {/* Answer Section */}
                 <Animated.View 
                   style={[
                     styles.answerSection, 
@@ -531,124 +729,137 @@ const VocabTestScreen = ({ route }) => {
 };
 
 const styles = StyleSheet.create({
+  // Base Layout
   safeArea: {
     flex: 1,
-    backgroundColor: '#F0F4F8', // Softer, more calming background
+    backgroundColor: '#F7F9FC', // Softer, more modern background
   },
   container: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
+
+  // Header Styles
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    shadowColor: '#4A5568',
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: 20, // Slightly larger radius for softer look
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-    marginBottom: 16,
+    shadowRadius: 10,
+    elevation: 6,
+    marginBottom: 20,
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
     backgroundColor: '#FF6B6B',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 4,
   },
+
+  // Progress Tracking
   progressWrapper: {
     flex: 1,
-    marginHorizontal: 16,
+    marginHorizontal: 20,
   },
   questionCounter: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#2D3748',
+    color: '#2C3E50', // Slightly darker for better contrast
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   progressBarContainer: {
-    height: 8,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 4,
+    height: 10, // Slightly thicker
+    backgroundColor: '#E8EDF3',
+    borderRadius: 5,
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#48BB78',
-    borderRadius: 4,
+    backgroundColor: '#4CAF50', // More vibrant green
+    borderRadius: 5,
   },
+
+  // Timer Styles
   timerContainer: {
-    backgroundColor: '#F7FAFC',
-    padding: 10,
-    borderRadius: 12,
-    minWidth: 70,
+    backgroundColor: '#FFFFFF', // White background for depth
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 15,
+    minWidth: 80,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   timer: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: 'bold',
-    color: '#2D3748',
+    color: '#34495E', // Rich, deep color
   },
+
+  // Content Containers
   contentContainer: {
     flex: 1,
   },
   questionImageAndTextContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#4A5568',
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: 20, // Larger radius for softer edges
+    padding: 25,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 10,
+    elevation: 5,
   },
   questionMediaContainer: {
-    flexDirection: 'column', // Stack vertically
-    alignItems: 'center', // Center items horizontally
-    width: '100%', // Full width
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
   },
   questionImage: {
-    width: '100%', // Make image full width of container
-    aspectRatio: 1, // Maintain square aspect ratio
-    maxWidth: 300, // Maximum width
-    maxHeight: 300, // Maximum height
-    borderRadius: 16,
-    marginBottom: 15, // Space between image and text
+    width: '100%',
+    aspectRatio: 1,
+    maxWidth: 350,
+    maxHeight: 350,
+    borderRadius: 20,
+    marginBottom: 20,
+    resizeMode: 'cover', // Ensures image covers entire area nicely
   },
   questionTextContainer: {
-    width: '100%', // Full width
-    alignItems: 'center', // Center text
-    paddingHorizontal: 10,
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 15,
   },
+
+  // Answer Sections
   answerSection: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#4A5568',
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 10,
+    elevation: 5,
   },
   multipleChoice: {
     flex: 1,
@@ -656,12 +867,22 @@ const styles = StyleSheet.create({
   writingSection: {
     flex: 1,
   },
+
   wordContentContainer: {
-    backgroundColor: '#F0F4F8',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 16,
+    backgroundColor: '#F7F9FC', // Light background color for the card
+    borderRadius: 20,            // Rounded corners
+    padding: 20,                 // Padding inside the card
+    marginTop: 20,               // Space above the card
+    shadowColor: '#000',         // Shadow color
+    shadowOffset: { width: 0, height: 4 }, // Shadow direction
+    shadowOpacity: 0.1,          // Shadow transparency
+    shadowRadius: 10,            // Shadow spread
+    elevation: 5,                // For Android shadow
+    borderWidth: 1,              // Optional: add border around the card
+    borderColor: '#E0E0E0',      // Light border color
+    marginBottom: 10
   },
+  
 });
 
 export default VocabTestScreen;

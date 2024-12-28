@@ -151,7 +151,6 @@ const TestSubject = () => {
       />
       {renderTabs()}
 
-      {/* Display "View Results" button initially if there are test results */}
       {testData?.testPractice?.length > 0 && !showAllResults && (
         <TouchableOpacity
           style={styles.showResultsButton} // Button styling

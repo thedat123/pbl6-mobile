@@ -7,7 +7,7 @@ import { API_BASE_URL } from '@env';
 
 const { height } = Dimensions.get('window');
 
-const TestPart2 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
+const TestPart2 = forwardRef(({ onQuestionStatusChange, testId, onQuestionLayout, questionRefs }, ref) => {
   const [questionData, setQuestionData] = useState([]);
   const [answers, setAnswers] = useState({});
   const [questionStatus, setQuestionStatus] = useState({});
@@ -132,7 +132,12 @@ const TestPart2 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
       >
         {questionData.map(group => 
           group.questions.map(question => (
-            <View key={question.id} style={styles.questionWrapper}>
+            <View 
+              key={question.id} 
+              style={styles.questionWrapper}
+              onLayout={(event) => onQuestionLayout(question.id, event)}
+              ref={el => questionRefs.current[question.id] = el}
+            >
               <QuestionNumber number={question.questionNumber} />
               
               {question.audio && (

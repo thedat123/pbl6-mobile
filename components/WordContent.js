@@ -58,9 +58,9 @@ const WordContent = ({ word, currentView, handleSpeak, handleSpeakExample }) => 
 
   switch (currentView) {
     case 0:
-      return renderWordView();
-    case 1:
       return renderDefinitionView();
+    case 1:
+      return renderWordView();
     case 2:
       return renderExampleView();
     default:

@@ -30,6 +30,7 @@ const VocabLearnScreen = ({ route }) => {
   const [newFolderDescription, setNewFolderDescription] = useState('');
   const [typedWord, setTypedWord] = useState('');
   const tickSound = useRef({ sound: null });
+  const [isIncorrect, setIsIncorrect] = useState(false);
 
   const [editingFolder, setEditingFolder] = useState(null);
   const [editedFolderName, setEditedFolderName] = useState('');
@@ -38,6 +39,10 @@ const VocabLearnScreen = ({ route }) => {
     inputRange: [0, 1],
     outputRange: ['0deg', '180deg'],
   });
+
+  const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
+    setModal({ visible: true, title, message, type, showCancel, onConfirm });
+  };
 
   useEffect(() => {
     if (!API_BASE_URL) {
@@ -65,6 +70,15 @@ const VocabLearnScreen = ({ route }) => {
     }
   };
 
+  const [modal, setModal] = useState({
+      visible: false,
+      title: '',
+      message: '',
+      type: 'info',
+      onConfirm: () => {},
+      showCancel: false,
+  });
+
   const handleSubmitWord = async () => {
     const isCorrect = typedWord.trim().toLowerCase() === vocabList[currentIndex]?.word.toLowerCase();
 
@@ -83,12 +97,14 @@ const VocabLearnScreen = ({ route }) => {
       });
   
       if (isCorrect) {
+        setIsIncorrect(false);
         const audioUri = vocabList[currentIndex]?.audio;
-        await handleSpeak(audioUri);  
-        setCurrentView(2); 
+        await handleSpeak(audioUri);
+        setCurrentView(2);
       } else {
-        alert('Try again!');
+        setIsIncorrect(true);
       }
+
     } catch (error) {
       console.error('Error playing sound:', error);
     }
@@ -209,10 +225,9 @@ const VocabLearnScreen = ({ route }) => {
       }
   
       setFolders(folders.filter(folder => folder.id !== folderId));
-      alert('Folder deleted successfully');
+      showAlert('Success', 'Folder deleted successfully', 'success');
     } catch (error) {
-      console.error('Error deleting folder:', error.message);
-      alert('Failed to delete folder. Please try again.');
+      showAlert('Error', 'Failed to delete folder. Please try again.', 'error');
     }
   };
 
@@ -240,21 +255,19 @@ const VocabLearnScreen = ({ route }) => {
           throw new Error('Failed to update folder');
         }
   
-        // Update the folder list with the new name
         setFolders((prevFolders) => 
           prevFolders.map((folder) =>
             folder.id === editingFolder.id ? updatedFolder : folder
           )
         );
   
-        setEditingFolder(null); // Close the modal
-        alert('Folder updated successfully');
+        setEditingFolder(null);
+        showAlert('Success', 'Folder updated successfully', 'success');
       } catch (error) {
-        console.error('Error updating folder:', error.message);
-        alert('Failed to update folder. Please try again.');
+        showAlert('Error', 'Failed to update folder. Please try again.', 'error');
       }
     } else {
-      alert('Please enter a valid folder name.');
+      showAlert('Error', 'Please enter a valid folder name.', 'error');
     }
   };  
 
@@ -289,10 +302,10 @@ const VocabLearnScreen = ({ route }) => {
         setCreateFolderModalVisible(false);
       } catch (error) {
         console.error('Error creating folder:', error.message);
-        alert('Failed to create folder. Please try again.');
+        showAlert('Error', 'Failed to create folder. Please try again.', 'error');
       }
     } else {
-      alert('Please enter a folder name.');
+      showAlert('Error', 'Please enter a folder name.', 'error');
     }
   };
 
@@ -319,7 +332,7 @@ const VocabLearnScreen = ({ route }) => {
       setFolders(updatedFolders);
     } catch (error) {
       console.error('Error fetching folder data:', error.message);
-      alert('Unable to load folders. Please try again.');
+      showAlert('Error', 'Unable to load folders. Please try again.', 'error');
     }
   };
   
@@ -340,19 +353,60 @@ const VocabLearnScreen = ({ route }) => {
         });
   
         if (!response.ok) {
-          throw new Error(); // Tạo lỗi để bắt trong catch
+          throw new Error();
         }
   
         const data = await response.json();
-        alert('Word pinned successfully!');
-        togglePinModal(); // Đóng modal sau khi ghim thành công
+        showAlert('Success', 'Word pinned successfully!', 'success');
+        togglePinModal();
       } catch {
-        alert('Failed to pin word. Please try again.');
+        showAlert('Error', 'Failed to pin word. Please try again.', 'error');
       }
     } else {
-      alert('Please select a folder and a valid word.');
+      showAlert('Error', 'Please select a folder and a valid word.', 'error');
     }
   };
+
+  const AlertModal = () => (
+    <Modal
+      transparent
+      visible={modal.visible}
+      animationType="fade"
+      onRequestClose={() => setModal(prev => ({ ...prev, visible: false }))}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContentAlert}>
+          <View style={[styles.modalHeader, styles[`${modal.type}Header`]]}>
+            <Text style={styles.modalTitle}>{modal.title}</Text>
+          </View>
+          <View style={styles.modalBody}>
+            <Text style={styles.modalMessage}>{modal.message}</Text>
+          </View>
+          <View style={styles.modalFooter}>
+            {modal.showCancel && (
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setModal(prev => ({ ...prev, visible: false }))}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={[styles.modalButton, styles.modalConfirmButton]}
+              onPress={() => {
+                setModal(prev => ({ ...prev, visible: false }));
+                modal.onConfirm();
+              }}
+            >
+              <Text style={styles.modalButtonText}>
+                {modal.type === 'danger' ? 'Logout' : 'OK'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
     
 
   if (vocabList.length === 0) {
@@ -389,12 +443,18 @@ const VocabLearnScreen = ({ route }) => {
           </View>
   
           <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Type the word..."
-              value={typedWord}
-              onChangeText={setTypedWord}
-            />
+          <TextInput
+            style={[
+              styles.textInput,
+              isIncorrect ? styles.textInputIncorrect : null,
+            ]}
+            placeholder="Type the word..."
+            value={typedWord}
+            onChangeText={(text) => {
+              setTypedWord(text);
+              setIsIncorrect(false); // Reset on new input
+            }}
+          />
             <TouchableOpacity style={styles.submitButton} onPress={handleSubmitWord}>
               <Text style={styles.submitButtonText}>SUBMIT</Text>
             </TouchableOpacity>
@@ -542,6 +602,7 @@ const VocabLearnScreen = ({ route }) => {
             </View>
           </View>
         </Modal>
+        <AlertModal />
       </ScrollView>
   );  
 };
@@ -801,6 +862,87 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  textInputIncorrect: {
+    borderColor: 'red',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContentAlert: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    padding: 20,
+    alignItems: 'center',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  modalHeaderError: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderSuccess: {
+    backgroundColor: '#34A853',
+  },
+  modalHeaderDanger: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderWarning: {
+    backgroundColor: '#FBBC04',
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 24,
+    backgroundColor: '#fff',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8EAED',
+  },
+  modalButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#34A853',
+  },
+  modalCancelButton: {
+    backgroundColor: '#EA4335',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

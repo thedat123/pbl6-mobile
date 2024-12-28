@@ -5,21 +5,39 @@ import { LineChart } from 'react-native-chart-kit';
 import { useMemo, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CommonActions, useNavigation } from '@react-navigation/native';
+import { API_BASE_URL } from '@env';
 
 const { width } = Dimensions.get('window');
 
 const VocabResultScreen = ({ route }) => {
-  const { results, totalQuestions, topicId, topicName } = route.params;
+  const { results, totalQuestions, topicId, topicName, totalTime } = route.params;
   const navigation = useNavigation();
   const [progress, setProgress] = useState(0);
   const progressAnimation = useMemo(() => new Animated.Value(0), []);
-  const correctAnswers = results.filter((result) => result.isCorrect).length;
-  const incorrectAnswers = totalQuestions - correctAnswers;
 
-  const [history, setHistory] = useState([]); // Stores quiz history
+  const uniqueWords = Array.isArray(results) ? [...new Set(results.map(r => r.currentIdQuestion))] : [];
+
+  const correctWords = uniqueWords.filter(wordId =>
+    results
+      .filter(r => r.currentIdQuestion === wordId)
+      .every(r => r.isCorrect)
+  );
+
+  const incorrectWords = uniqueWords.filter(wordId => !correctWords.includes(wordId));
+
+  const correctAnswers = correctWords.length;
+  const incorrectAnswers = incorrectWords.length;
+  const maxCorrectAnswers = correctAnswers;
+
+  const [history, setHistory] = useState([]);
+  const [historyId, setHistoryId] = useState(null);
+  const [detailedResult, setDetailedResult] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const targetProgress = correctAnswers / totalQuestions;
+    console.log(results);
+    console.log("=====================================");
+    const targetProgress = maxCorrectAnswers / (totalQuestions / 2); 
     progressAnimation.addListener(({ value }) => {
       setProgress(value);
     });
@@ -30,39 +48,67 @@ const VocabResultScreen = ({ route }) => {
       useNativeDriver: false,
     }).start();
 
-    saveResultToHistory(correctAnswers); // Save results after calculation
-
     return () => progressAnimation.removeAllListeners();
-  }, [progressAnimation]);
+  }, [progressAnimation, maxCorrectAnswers]);
 
-  // Save current results to AsyncStorage
-  const saveResultToHistory = async (score) => {
-    try {
-      const storedHistory = await AsyncStorage.getItem(`quizHistory_${topicId}`);
-      const parsedHistory = storedHistory ? JSON.parse(storedHistory) : [];
-      const updatedHistory = [...parsedHistory, score];
-      await AsyncStorage.setItem(`quizHistory_${topicId}`, JSON.stringify(updatedHistory));
-      setHistory(updatedHistory);
-    } catch (error) {
-      console.error('Error saving quiz history:', error);
-    }
-  };
-
-  // Load quiz history from AsyncStorage
   useEffect(() => {
-    const loadHistory = async () => {
-      try {
-        const storedHistory = await AsyncStorage.getItem(`quizHistory_${topicId}`);
-        if (storedHistory) {
-          setHistory(JSON.parse(storedHistory));
-        }
-      } catch (error) {
-        console.error('Error loading quiz history:', error);
-      }
+    const saveResultsToApi = async () => {
+      const requestData = {
+        idTopic: topicId,
+        time: totalTime,
+        listCorrectWord: [...new Set(correctWords)],
+        listIncorrectWord: [...new Set(incorrectWords)],
+      };
+
+      const token = await AsyncStorage.getItem('token');
+
+      const response = await fetch(`${API_BASE_URL}:3001/api/v1/topic-history/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) throw new Error('Failed to save results');
+      const data = await response.json();
+      setHistoryId(data.id);
+
+      await AsyncStorage.setItem('latestVocabResults', JSON.stringify({
+        correctWords,
+        incorrectWords,
+        totalTime,
+        results,
+      }));
     };
 
-    loadHistory();
-  }, [topicId]);
+    saveResultsToApi();
+  }, [correctWords, results, topicId, totalTime]);
+
+  useEffect(() => {
+    if (historyId) {
+      const fetchDetailedResults = async () => {
+        try {
+          const token = await AsyncStorage.getItem('token');
+          const response = await fetch(
+            `${API_BASE_URL}:3001/api/v1/topic-history/${historyId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          if (!response.ok) throw new Error('Failed to fetch detailed results');
+          const data = await response.json();
+          setDetailedResult(data);
+          setLoading(false);
+        } catch (error) {
+          console.error('Error fetching detailed results:', error);
+        }
+      };
+
+      fetchDetailedResults();
+    }
+  }, [historyId]);
 
   const handleNavigateHome = () => {
     navigation.dispatch(
@@ -91,21 +137,21 @@ const VocabResultScreen = ({ route }) => {
     );
   };
 
-  const bestScore = useMemo(() => Math.max(...history, 0), [history]); // Best score from history
-  const chartData = [0, bestScore, correctAnswers]; // Start at 0, then best score and current score
+  const bestScore = useMemo(() => Math.max(...history, 0), [history]);
+  const chartData = [0, bestScore, maxCorrectAnswers];
 
   const renderProgressStats = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statItem}>
-        <Text style={styles.statLabel}>Từ đã thuộc</Text>
+        <Text style={styles.statLabel}>Words Learned</Text>
         <Text style={styles.statValue}>{correctAnswers}</Text>
-        <Text style={styles.statSubtext}>từ vựng</Text>
+        <Text style={styles.statSubtext}>vocabulary</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Text style={styles.statLabel}>Từ chưa thuộc</Text>
+        <Text style={styles.statLabel}>Words Not Learned</Text>
         <Text style={styles.statValue}>{incorrectAnswers}</Text>
-        <Text style={styles.statSubtext}>từ vựng</Text>
+        <Text style={styles.statSubtext}>vocabulary</Text>
       </View>
     </View>
   );
@@ -114,8 +160,8 @@ const VocabResultScreen = ({ route }) => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>Kết quả kiểm tra</Text>
-          <Text style={styles.subtitle}>Chủ đề: {topicName}</Text>
+          <Text style={styles.title}>Test Results</Text>
+          <Text style={styles.subtitle}>Topic: {topicName}</Text>
         </View>
 
         <View style={styles.resultCard}>
@@ -128,18 +174,18 @@ const VocabResultScreen = ({ route }) => {
               strokeWidth={15}
             />
             <View style={styles.progressTextContainer}>
-              <Text style={styles.progressPercentage}>{Math.round((correctAnswers / totalQuestions) * 100)}%</Text>
-              <Text style={styles.progressLabel}>Hoàn thành</Text>
+              <Text style={styles.progressPercentage}>{Math.round((maxCorrectAnswers / (totalQuestions / 2)) * 100)}%</Text>
+              <Text style={styles.progressLabel}>Completed</Text>
             </View>
           </View>
           {renderProgressStats()}
         </View>
 
         <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Tiến độ học tập</Text>
+          <Text style={styles.chartTitle}>Learning Progress</Text>
           <LineChart
             data={{
-              labels: ['0', 'Kết quả tốt nhất', 'Kết quả hiện tại'], // Chart starts at 0
+              labels: ['0', 'Best Score', 'Current Score'],
               datasets: [{ data: chartData }],
             }}
             width={width - 60}
@@ -167,13 +213,13 @@ const VocabResultScreen = ({ route }) => {
 
         <View style={styles.actionButtons}>
           <TouchableOpacity style={[styles.button, styles.reviewButton]} onPress={handleNavigateLearn}>
-            <Text style={styles.reviewButtonText}>Học lại</Text>
+            <Text style={styles.reviewButtonText}>Learn Again</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.button, styles.retryButton]} onPress={handleNavigateTest}>
-            <Text style={styles.retryButtonText}>Kiểm tra lại</Text>
+            <Text style={styles.retryButtonText}>Retake Test</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.button, styles.backButton]} onPress={handleNavigateHome}>
-            <Text style={styles.retryButtonText}>Trở về</Text>
+            <Text style={styles.retryButtonText}>Return Home</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

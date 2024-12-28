@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import MainAppNavigator from '../navigation/MainAppNavigator';
 import VocabCard from '../components/Vocab';
@@ -19,28 +19,63 @@ import TestPart7 from '../screens/TestPart7';
 import TestPartSelector from '../components/TestPartSelector';
 import TestBase from '../components/TestBase';
 import MainNavigator from '../navigation/MainNavigator';
-import ResultTestPageScreen from '../screens/ResultTestPageScreen';
 import ResultStatisticScreen from '../screens/ResultStatisticScreen';
 import ScheduleScreen from '../screens/ScheduleScreen';
 import TestScreen from '../screens/TestScreen';
 import SignInForm from '../components/SignInForm';
 import TestDetailResult from '../screens/TestDetailResult';
+import PersonalWorldFolderScreen from '../screens/PersonalWordFolderScreen';
+import FolderWordDetail from '../screens/FolderWordDetail';
+import AnswerTranscriptScreen from '../screens/AnswerTranscriptScreen';
+import TestPart1Answer from '../screens/TestPart1Answer';
+import TestPart2Answer from '../screens/TestPart2Answer';
+import TestPart3Answer from '../screens/TestPart3Answer';
+import TestPart4Answer from '../screens/TestPart4Answer';
+import TestPart5Answer from '../screens/TestPart5Answer';
+import TestPart6Answer from '../screens/TestPart6Answer';
+import FullAnswersScreen from '../screens/FullAnswersScreen';
+import ListenTest from '../screens/ListenTest';
+import ListenTestPractice from '../screens/ListenTestPractice';
+import ListenTestResult from '../screens/ListenTestResult';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
-const Stack = createStackNavigator(); // Create Stack Navigator
+const Stack = createStackNavigator();
 
 const MainAppRoute = () => {
+  const [token, setToken] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchToken = async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem('token');
+        setToken(storedToken);
+      } catch (error) {
+        console.error('Error retrieving token:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchToken();
+  }, []);
+
+  if (isLoading) {
+    return null;
+  }
+
   return (
-    <Stack.Navigator initialRouteName="MainAppNavigator">
+    <Stack.Navigator initialRouteName={token ? 'MainAppNavigator' : 'MainNavigator'}>
       <Stack.Screen 
         name="MainNavigator" 
         component={MainNavigator} 
-        options={{ headerShown: false }} // Hide header for MainAppNavigator
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="MainAppNavigator" 
         component={MainAppNavigator} 
-        options={{ headerShown: false }} // Hide header for MainAppNavigator
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="VocabCard" 
@@ -100,6 +135,36 @@ const MainAppRoute = () => {
       <Stack.Screen 
         name="TestScreen"
         component={TestScreen}
+      />
+      <Stack.Screen 
+        name="ListenTest"
+        component={ListenTest}
+        options={{ 
+          title: "Listen Test",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="ListenTestPractice"
+        component={ListenTestPractice}
+        options={{ 
+          title: "Listen Test Practice",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="ListenTestResult"
+        component={ListenTestResult}
+        options={{ 
+          title: "Listen Test Result",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
       />
       <Stack.Screen 
         name="TestPart1"
@@ -182,13 +247,6 @@ const MainAppRoute = () => {
         }} 
       />
       <Stack.Screen 
-        name="ResultTestPageScreen"
-        component={ResultTestPageScreen}
-        options={{ 
-          title: "Test Result",
-        }} 
-      />
-      <Stack.Screen 
         name="ResultStatisticScreen"
         component={ResultStatisticScreen}
         options={{ 
@@ -222,8 +280,100 @@ const MainAppRoute = () => {
           ),
         }} 
       />
-      
-      
+      <Stack.Screen 
+        name="PersonalWordFolderScreen"
+        component={PersonalWorldFolderScreen}
+        options={{ 
+          title: "Personal Word Folder Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="FolderWordDetail"
+        component={FolderWordDetail}
+        options={{ 
+          title: "Folder Word Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="AnswerTranscriptScreen"
+        component={AnswerTranscriptScreen}
+      />
+      <Stack.Screen 
+        name="TestPart1Answer"
+        component={TestPart1Answer}
+        options={{ 
+          title: "Test Part 1 Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="TestPart2Answer"
+        component={TestPart2Answer}
+        options={{ 
+          title: "Test Part 2 Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="TestPart3Answer"
+        component={TestPart3Answer}
+        options={{ 
+          title: "Test Part 3 Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="TestPart4Answer"
+        component={TestPart4Answer}
+        options={{ 
+          title: "Test Part 4 Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="TestPart5Answer"
+        component={TestPart5Answer}
+        options={{ 
+          title: "Test Part 5 Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="TestPart6Answer"
+        component={TestPart6Answer}
+        options={{ 
+          title: "Test Part 6 Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="FullAnswers"
+        component={FullAnswersScreen}
+        options={{ 
+          title: "Full Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
     </Stack.Navigator>
   );
 };

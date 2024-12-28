@@ -8,6 +8,10 @@ import {
   StyleSheet,
   Image,
   ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { API_BASE_URL } from "@env";
 import axios from "axios";
@@ -20,10 +24,11 @@ const Comment = ({ idTest }) => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [expandedComments, setExpandedComments] = useState({});
 
   const fetchComments = async (pageNum = 1) => {
     if (loading || !hasMore) return;
-
+  
     setLoading(true);
     try {
       const response = await axios.get(
@@ -32,17 +37,17 @@ const Comment = ({ idTest }) => {
           params: { page: pageNum, limit: 10 },
         }
       );
-
+  
       const newComments = response.data.map((comment) => ({
         ...comment,
-        subComment: comment.subComment || [],
-        expanded: false,
+        subComment: comment.subComment || [], // Bảo đảm subComment luôn tồn tại
+        expanded: false, // Thêm cờ để quản lý trạng thái mở rộng
       }));
-
+  
       setComments((prev) =>
         pageNum === 1 ? newComments : [...prev, ...newComments]
       );
-
+  
       setHasMore(newComments.length === 10);
       setPage(pageNum);
     } catch (error) {
@@ -50,7 +55,7 @@ const Comment = ({ idTest }) => {
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
   useEffect(() => {
     fetchComments(1);
@@ -62,6 +67,13 @@ const Comment = ({ idTest }) => {
     }
   };
 
+  const toggleSubComments = (commentId) => {
+    setExpandedComments((prev) => ({
+      ...prev,
+      [commentId]: !prev[commentId],
+    }));
+  };
+
   const addComment = async () => {
     if (comment.trim()) {
       try {
@@ -69,19 +81,16 @@ const Comment = ({ idTest }) => {
           content: comment,
           idTest: idTest,
         };
-        console.log(newComment);
         const token = await AsyncStorage.getItem("token");
         if (!token) {
-          throw new Error(
-            "Authentication token not found. Please log in again."
-          );
+          throw new Error("Authentication token not found. Please log in again.");
         }
         const response = await axios.post(
           `${API_BASE_URL}:3001/api/v1/comment/`,
           newComment,
           {
             headers: {
-              Authorization: `Bearer ${token}`,
+              "Authorization": `Bearer ${token}`,
               "Content-Type": "application/json",
             },
           }
@@ -94,37 +103,49 @@ const Comment = ({ idTest }) => {
     }
   };
 
-  const addReply = async (commentId, parentId = null) => {
+  const addReply = async (commentId) => {
+    console.log(reply[commentId]);
     if (reply[commentId]?.trim()) {
       try {
         const newReply = {
-          text: reply[commentId],
-          user: { name: "Current User", avatar: "default-avatar.png" },
-          createdAt: new Date().toISOString(),
+          content: reply[commentId],
+          idComment: commentId,
         };
+  
+        const token = await AsyncStorage.getItem("token");
+        if (!token) {
+          throw new Error("Authentication token not found. Please log in again.");
+        }
+  
         const response = await axios.post(
-          `${API_BASE_URL}:3001/api/v1/comment/test/${idTest}/${commentId}`,
-          { ...newReply, parentId }
+          `${API_BASE_URL}:3001/api/v1/comment`,
+          newReply,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
         );
-
-        setComments(
-          comments.map((comment) =>
+  
+        setComments((prev) =>
+          prev.map((comment) =>
             comment.id === commentId
               ? {
                   ...comment,
-                  subComment: [response.data, ...comment.subComment],
+                  subComment: [response.data, ...(comment.subComment || [])],
                   expanded: true,
                 }
               : comment
           )
         );
-
+  
         setReply((prev) => ({ ...prev, [commentId]: "" }));
       } catch (error) {
         console.error("Error adding reply:", error);
       }
     }
-  };
+  };      
 
   const renderFooter = () => {
     return loading ? (
@@ -163,11 +184,10 @@ const Comment = ({ idTest }) => {
         </TouchableOpacity>
       </View>
   
-      {/* Nested Replies */}
       {item.subComment && item.subComment.length > 0 && (
         <View style={styles.repliesContainer}>
-          {item.subComment.map((subComment, subIndex) => (
-            <View key={`${subComment.id}-${subIndex}`} style={styles.replyBubble}>
+          {item.subComment.map((subComment) => (
+            <View key={subComment.id} style={styles.replyBubble}>
               <View style={styles.replyHeader}>
                 <Image
                   source={{ uri: subComment.user.avatar || "default-avatar.png" }}
@@ -175,13 +195,12 @@ const Comment = ({ idTest }) => {
                 />
                 <Text style={styles.replyUserName}>{subComment.user.name}</Text>
               </View>
-              <Text style={styles.replyText}>{subComment.text}</Text>
+              <Text style={styles.replyText}>{subComment.content}</Text>
             </View>
           ))}
         </View>
       )}
   
-      {/* Reply Input */}
       {reply[item.id] !== undefined && (
         <View style={styles.replyInputContainer}>
           <TextInput
@@ -203,47 +222,57 @@ const Comment = ({ idTest }) => {
         </View>
       )}
     </View>
-  );
-  
+  );  
 
   return (
-    <View style={styles.container}>
-      {/* Comment Input */}
-      <View style={styles.commentInputContainer}>
-        <TextInput
-          style={styles.commentInput}
-          placeholder="Share your thoughts..."
-          placeholderTextColor="#6B7280"
-          value={comment}
-          onChangeText={setComment}
-          multiline
-        />
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            !comment.trim() && styles.sendButtonDisabled,
-          ]}
-          onPress={addComment}
-          disabled={!comment.trim()}
-        >
-          <Text style={styles.sendButtonText}>Send</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={comments}
-        renderItem={renderComment}
-        keyExtractor={(item, index) => `${item.id}-${index}`}
-        onEndReached={loadMoreComments}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
-        }
-        contentContainerStyle={styles.commentList}
-      />
-    </View>
-  );
+    <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <View style={styles.container}>
+          <FlatList
+            data={comments}
+            renderItem={renderComment}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
+            onEndReached={loadMoreComments}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={renderFooter}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>
+                No comments yet. Be the first to comment!
+              </Text>
+            }
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              flexGrow: 1, // Ensures FlatList can scroll
+              paddingBottom: 80, // Prevents overlap with the input field
+            }}
+          />
+          <View style={styles.commentInputContainer}>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Share your thoughts..."
+              placeholderTextColor="#6B7280"
+              value={comment}
+              onChangeText={setComment}
+              multiline
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                !comment.trim() && styles.sendButtonDisabled,
+              ]}
+              onPress={addComment}
+              disabled={!comment.trim()}
+            >
+              <Text style={styles.sendButtonText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
+  );  
 };
 
 const styles = StyleSheet.create({
@@ -349,36 +378,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
-  replyInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 12,
-  },
-  replyInput: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 80,
-    borderColor: "#BDBDBD",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 12,
-    backgroundColor: "#FFFFFF",
-    fontSize: 14,
-    color: "#212121",
-  },
-  sendReplyButton: {
-    backgroundColor: "#1E88E5",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  sendReplyButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "500",
-  },
   repliesContainer: {
     marginTop: 12,
     paddingLeft: 16,
@@ -412,6 +411,36 @@ const styles = StyleSheet.create({
     color: "#757575",
     marginTop: 4,
   },
+  replyInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+  },
+  replyInput: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 80,
+    borderColor: "#BDBDBD",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 12,
+    backgroundColor: "#FFFFFF",
+    fontSize: 14,
+    color: "#212121",
+  },
+  sendReplyButton: {
+    backgroundColor: "#1E88E5",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  sendReplyButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "500",
+  },
   emptyText: {
     textAlign: "center",
     color: "#9E9E9E",
@@ -419,6 +448,7 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
 });
+
 
 
 export default Comment;

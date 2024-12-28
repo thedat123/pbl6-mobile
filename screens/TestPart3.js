@@ -7,7 +7,7 @@ import axios from 'axios';
 
 const { height } = Dimensions.get('window');
 
-const TestPart3 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
+const TestPart3 = forwardRef(({ onQuestionStatusChange, testId, onQuestionLayout, questionRefs }, ref) => {
   const [questionData, setQuestionData] = useState([]);
   const [answers, setAnswers] = useState({});
   const [questionStatus, setQuestionStatus] = useState({});
@@ -15,6 +15,7 @@ const TestPart3 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const scrollViewRef = useRef(null);
+  const groupRefs = useRef({});
 
   useEffect(() => {
     if (!API_BASE_URL) {
@@ -44,7 +45,7 @@ const TestPart3 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
               questionNumber: q.questionNumber,
               question: q.question,
               options: q.answer.map((answer, index) => ({
-                label: String.fromCharCode(65 + index), // A, B, C, D...
+                label: String.fromCharCode(65 + index),
                 text: answer,
                 isCorrect: q.correctAnswer === answer,
               })),
@@ -54,8 +55,6 @@ const TestPart3 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
             };
           }).sort((a, b) => a.questionNumber - b.questionNumber)
         }));
-  
-        console.log("Transformed Questions:", transformedQuestions);
   
         setQuestionData(transformedQuestions);        
         setStartTime(Date.now());
@@ -67,6 +66,45 @@ const TestPart3 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
       setError(err.message);
       setIsLoading(false);
     }
+  };
+
+  const measureQuestionPosition = (groupId, questionId, event) => {
+    if (!groupRefs.current[groupId]) {
+      groupRefs.current[groupId] = { position: 0, questions: {} };
+    }
+
+    const layout = event.nativeEvent.layout;
+    groupRefs.current[groupId].questions[questionId] = layout.y;
+
+    const absolutePosition = groupRefs.current[groupId].position + layout.y;
+    
+    if (onQuestionLayout) {
+      onQuestionLayout(questionId, { 
+        nativeEvent: { 
+          layout: { y: absolutePosition } 
+        } 
+      });
+    }
+  };
+
+  const measureGroupPosition = (groupId, event) => {
+    const layout = event.nativeEvent.layout;
+    if (!groupRefs.current[groupId]) {
+      groupRefs.current[groupId] = { position: 0, questions: {} };
+    }
+    groupRefs.current[groupId].position = layout.y;
+
+    // Recalculate all questions in this group
+    Object.entries(groupRefs.current[groupId].questions).forEach(([questionId, questionY]) => {
+      const absolutePosition = layout.y + questionY;
+      if (onQuestionLayout) {
+        onQuestionLayout(questionId, { 
+          nativeEvent: { 
+            layout: { y: absolutePosition } 
+          } 
+        });
+      }
+    });
   };
   
   useEffect(() => {
@@ -137,33 +175,48 @@ const TestPart3 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
         showsVerticalScrollIndicator={false}
       >
         {questionData.map(group => (
-          <View key={group.id} style={styles.groupWrapper}>
+          <View 
+            key={group.id} 
+            style={styles.groupWrapper}
+            onLayout={(event) => measureGroupPosition(group.id, event)}
+          >
             {group.audioUrl && (
               <AudioPlayer audioUri={group.audioUrl} questionId={group.id} />
             )}
   
-            {group.questions.map((question, index) => {  
-              return (
-                <View key={question.id} style={styles.questionWrapper}>
-                  <View style={styles.questionWrapperChild}>
-                    <QuestionNumber number={question.questionNumber} />
-                    <Text style={styles.questionText}>{question.question}</Text>
-                  </View>
-
-                  {question.image && (
-                    <Image source={{ uri: question.image }} style={styles.questionImage} resizeMode="contain" />
-                  )}
-    
-                  <View style={styles.questionOptionsContainer}>
-                    <QuestionOptions
-                      question={question}
-                      selectedAnswer={answers[question.id]}
-                      onAnswerSelect={handleAnswerSelect}
-                    />
-                  </View>
+            {group.questions.map((question) => (
+              <View 
+                key={question.id} 
+                style={styles.questionWrapper}
+                onLayout={(event) => measureQuestionPosition(group.id, question.id, event)}
+                ref={el => {
+                  if (questionRefs && questionRefs.current) {
+                    questionRefs.current[question.id] = el;
+                  }
+                }}
+              >
+                <View style={styles.questionWrapperChild}>
+                  <QuestionNumber number={question.questionNumber} />
+                  <Text style={styles.questionText}>{question.question}</Text>
                 </View>
-              );
-            })}
+
+                {question.image && (
+                  <Image 
+                    source={{ uri: question.image }} 
+                    style={styles.questionImage} 
+                    resizeMode="contain" 
+                  />
+                )}
+    
+                <View style={styles.questionOptionsContainer}>
+                  <QuestionOptions
+                    question={question}
+                    selectedAnswer={answers[question.id]}
+                    onAnswerSelect={handleAnswerSelect}
+                  />
+                </View>
+              </View>
+            ))}
           </View>
         ))}
       </ScrollView>
@@ -205,7 +258,17 @@ const styles = StyleSheet.create({
   },
   questionWrapperChild: {
     flexDirection: 'row',
-  }
+  },
+  groupWrapper: {
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    paddingBottom: 20,
+  },
+  questionWrapper: {
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
 });
 
 export default TestPart3;

@@ -1,17 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, SafeAreaView, TouchableOpacity, Dimensions, useWindowDimensions, Animated, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import Pagination from '../components/Pagination';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { moderateScale } from 'react-native-size-matters';
 import { API_BASE_URL } from '@env';
-
-const practiceResults = [
-    { id: '1', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 },
-    { id: '2', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 },
-    { id: '3', title: '2024 Practice Set TOEIC Test 10', date: '31/08/2024', score: 345 }
-];
 
 const LEVELS = [
     { id: 'all', label: 'All', color: '#9E9E9E', icon: 'layers', gradient: ['#9E9E9E', '#757575'] },
@@ -19,12 +14,6 @@ const LEVELS = [
     { id: 'intermediate', label: 'Intermediate', color: '#FF9800', icon: 'trending-up', gradient: ['#FF9800', '#F57C00'] },
     { id: 'advanced', label: 'Advanced', color: '#F44336', icon: 'star', gradient: ['#F44336', '#D32F2F'] },
   ];  
-
-  const recentTests = [
-    { id: '1', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
-    { id: '2', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
-    { id: '3', title: 'January Reading Practice Test 1', date: '23/01/2023', percentage: '0%' },
-];
 
 const ITEMS_PER_PAGE = 4;
 const HomePageScreen = () => {
@@ -41,12 +30,15 @@ const HomePageScreen = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
-
-    // Responsive card widths
     const resultCardWidth = width * (isLandscape ? 0.4 : 0.75);
     const gridColumnWidth = (width - 60) / (isLandscape ? 3 : 2);
 
     const visibleVocabGroups = showAllVocabGroups ? vocabGroups : vocabGroups.slice(0, 4);
+    const [lastPracticeResults, setLastPracticeResults] = useState([]);
+    const [recentTests, setRecentTests] = useState([]);
+    const [showAllTests, setShowAllTests] = useState(false);
+    const [currentPageVocab, setCurrentPageVocab] = useState(1);
+    const [currentPageTests, setCurrentPageTests] = useState(1);
     const navigation = useNavigation();
 
     useEffect(() => {
@@ -68,7 +60,15 @@ const HomePageScreen = () => {
 
         animate();
         fetchInitialData();
+        fetchLastPracticeResults();
+        fetchLastRecentTest();
     }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchInitialData();
+        }, [targetScore, testDate])
+    );
 
     const fetchInitialData = async () => {
         setLoading(true);
@@ -93,6 +93,37 @@ const HomePageScreen = () => {
     useEffect(() => {
         fetchInitialData();
     }, [targetScore]); 
+
+    const fetchLastPracticeResults = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            if (token) {
+                const response = await fetch(`${API_BASE_URL}:3001/api/v1/test-practice/user/lastPractice`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+    
+                if (!response.ok) {
+                    throw new Error('Failed to fetch last practice results');
+                }
+    
+                const data = await response.json();
+                const processedData = data.lastPractice.map((practice) => ({
+                    id: practice.id,
+                    title: practice.test.name,
+                    date: new Date(practice.createdAt).toLocaleDateString(),
+                    score: practice.LCScore + practice.RCScore,
+                }));
+                setLastPracticeResults(processedData);
+            }
+        } catch (error) {
+            console.error('Error fetching last practice results:', error);
+            setError('Unable to load practice results.');
+        }
+    };
 
     const fetchUsernameFromToken = async () => {
         try {
@@ -126,15 +157,18 @@ const HomePageScreen = () => {
         try {
             const response = await fetch(`${API_BASE_URL}:3001/api/v1/group-topic/`);
             if (!response.ok) throw new Error('Failed to fetch vocab groups');
+            
             const data = await response.json();
-
-            // Ensure all groups have `topics` and `topicsCount`
-            const processedData = data.map(group => ({
+            
+            const { data: vocabGroupsData, first, last, limit, total } = data;
+    
+            const processedData = vocabGroupsData.map(group => ({
                 ...group,
                 topics: group.topics || [],
                 topicsCount: group.topics ? group.topics.length : 0,
+                userCount: group.userCount || 0,
             }));
-
+    
             setVocabGroups(processedData); // Set the vocab groups state
             await AsyncStorage.setItem('vocabGroups', JSON.stringify(processedData));
             await AsyncStorage.setItem('lastUpdated', Date.now().toString());
@@ -142,32 +176,66 @@ const HomePageScreen = () => {
             setError('Unable to load vocabulary groups');
         }
     };
+    
+
+    const fetchLastRecentTest = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            if (token) {
+                const response = await fetch(`${API_BASE_URL}:3001/api/v1/test`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+    
+                if (!response.ok) {
+                    throw new Error('Failed to fetch test data');
+                }
+    
+                const responseData = await response.json();
+    
+                if (Array.isArray(responseData.data)) {
+                    const processedData = responseData.data.map(test => ({
+                        id: test.id,
+                        title: test.name,
+                        date: new Date(test.createdAt).toLocaleDateString(),
+                    }));
+    
+                    setRecentTests(processedData);
+                } else {
+                    throw new Error('Data format is not as expected');
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching practice results:', error);
+            setError('Unable to load practice results.');
+        }
+    };            
 
     const renderPracticeResult = ({ item }) => (
-        <TouchableOpacity style={[styles.resultCard, { width: resultCardWidth }]}>
-            <LinearGradient
-                colors={['#4facfe', '#00f2fe']}
-                style={styles.resultGradient}
-            >
-                <Text style={[styles.resultTitle, { fontSize: width * 0.04 }]}>{item.title}</Text>
-                <View style={styles.resultDetails}>
-                    <Text style={[styles.resultText, { fontSize: width * 0.035 }]}>Date Taken: {item.date}</Text>
-                    <Text style={[styles.resultText, styles.scoreText, { fontSize: width * 0.045 }]}>Score: {item.score}</Text>
-                </View>
-            </LinearGradient>
+        <TouchableOpacity style={[styles.resultCard, { width: moderateScale(300) }]}>
+        <LinearGradient
+            colors={['#4facfe', '#00f2fe']}
+            style={styles.resultGradient}
+        >
+            <Text style={[styles.resultTitle, { fontSize: moderateScale(16) }]}>{item.title}</Text>
+            <View style={styles.resultDetails}>
+            <Text style={[styles.resultText, { fontSize: moderateScale(14) }]}>Date Taken: {item.date}</Text>
+            <Text style={[styles.resultText, styles.scoreText, { fontSize: moderateScale(16) }]}>Score: {item.score}</Text>
+            </View>
+        </LinearGradient>
         </TouchableOpacity>
     );
 
     const renderVocabSet = ({ item }) => {
         const levelConfig = LEVELS.find((l) => l.id === item.level) || LEVELS[0];
-        
+    
         return (
             <Animated.View 
                 key={item.id} 
-                style={[
-                    styles.vocabCard, 
-                    { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
-                ]}
+                style={[styles.vocabCard, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}
             >
                 <TouchableOpacity 
                     style={styles.vocabCardInner}
@@ -187,16 +255,16 @@ const HomePageScreen = () => {
                             <Text style={styles.levelBadgeText}>{levelConfig.label}</Text>
                         </LinearGradient>
                     </View>
-                    
+    
                     <View style={styles.vocabContent}>
                         <Text style={styles.vocabTitle} numberOfLines={2}>{item.name}</Text>
-                        
+    
                         <View style={styles.vocabStats}>
                             <View style={styles.topicCount}>
                                 <Feather name="book" size={14} color="#666" />
                                 <Text style={styles.topicCountText}>{item.topicsCount} topics</Text>
                             </View>
-                            
+    
                             <View style={styles.progressSection}>
                                 <View style={styles.progressContainer}>
                                     <View style={styles.progressBackground}>
@@ -213,7 +281,7 @@ const HomePageScreen = () => {
                 </TouchableOpacity>
             </Animated.View>
         );
-    };
+    };    
 
     const renderRecentTest = ({ item }) => (
         <TouchableOpacity style={[styles.testCard, { width: gridColumnWidth }]}>
@@ -222,16 +290,14 @@ const HomePageScreen = () => {
             </View>
             <Text 
                 numberOfLines={2} 
-                style={[styles.testTitle, { fontSize: width * 0.035 }]}
-            >
+                style={[styles.testTitle, { fontSize: width * 0.035 }]}>
                 {item.title}
             </Text>
             <View style={styles.testInfo}>
                 <Text style={[styles.testText, { fontSize: width * 0.03 }]}>{item.date}</Text>
-                <Text style={[styles.testText, styles.percentageText, { fontSize: width * 0.03 }]}>{item.percentage}</Text>
             </View>
         </TouchableOpacity>
-    );
+    );    
 
     return (
         <FlatList
@@ -251,7 +317,7 @@ const HomePageScreen = () => {
                                 </View>
                                 <View style={[styles.infoCard, { padding: width * 0.03 }]}>
                                     <Text style={[styles.headerSubtext, { fontSize: width * 0.03 }]}>Exam Date</Text>
-                                    <Text style={[styles.boldText, { fontSize: width * 0.04 }]}>{testDate}</Text>
+                                    <Text style={[styles.boldText, { fontSize: width * 0.036 }]}>{testDate}</Text>
                                 </View>
                                 <View style={[styles.infoCard, { padding: width * 0.03 }]}>
                                     <Text style={[styles.headerSubtext, { fontSize: width * 0.03 }]}>Target Score</Text>
@@ -263,14 +329,11 @@ const HomePageScreen = () => {
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <Text style={[styles.sectionTitle, { fontSize: width * 0.05 }]}>Latest Practice Results</Text>
-                            <TouchableOpacity>
-                                <Text style={[styles.seeAll, { fontSize: width * 0.035 }]}>See All</Text>
-                            </TouchableOpacity>
                         </View>
                         <FlatList
-                            data={practiceResults}
+                            data={lastPracticeResults}
                             renderItem={renderPracticeResult}
-                            keyExtractor={item => item.id}
+                            keyExtractor={(item) => item.id}
                             horizontal
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.horizontalListContent}
@@ -301,8 +364,8 @@ const HomePageScreen = () => {
                                             <View style={styles.vocabList}>
                                                 {vocabGroups
                                                     .slice(
-                                                        (currentPage - 1) * ITEMS_PER_PAGE,
-                                                        currentPage * ITEMS_PER_PAGE
+                                                        (currentPageVocab - 1) * ITEMS_PER_PAGE,
+                                                        currentPageVocab * ITEMS_PER_PAGE
                                                     )
                                                     .map((item) => renderVocabSet({ item }))}
                                             </View>
@@ -310,13 +373,12 @@ const HomePageScreen = () => {
                                             <Text style={styles.noResultsText}>No vocabulary sets found.</Text>
                                         )}
 
-                                        {/* Pagination */}
                                         <View style={styles.paginationContainer}>
                                             <Pagination
-                                                currentPage={currentPage}
+                                                currentPage={currentPageVocab}
                                                 totalItems={vocabGroups.length}
                                                 itemsPerPage={ITEMS_PER_PAGE}
-                                                onPageChange={setCurrentPage}
+                                                onPageChange={setCurrentPageVocab}
                                             />
                                         </View>
                                     </>
@@ -333,23 +395,45 @@ const HomePageScreen = () => {
                         )}
                     </View>
 
-
-
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <Text style={[styles.sectionTitle, { fontSize: width * 0.05 }]}>Most Recent Tests</Text>
-                            <TouchableOpacity>
-                                <Text style={[styles.seeAll, { fontSize: width * 0.035 }]}>See All</Text>
+                            <TouchableOpacity onPress={() => setShowAllTests(!showAllTests)}>
+                                <Text style={[styles.seeAll, { fontSize: width * 0.035 }]}>
+                                    {showAllTests ? "Show Less" : "See All"}
+                                </Text>
                             </TouchableOpacity>
                         </View>
-                        <FlatList
-                            data={recentTests}
-                            renderItem={renderRecentTest}
-                            keyExtractor={item => item.id}
-                            numColumns={isLandscape ? 3 : 2}
-                            key={isLandscape ? 'landscape' : 'portrait'}
-                            contentContainerStyle={styles.gridListContent}
-                        />
+
+                        {showAllTests ? (
+                            <>
+                                <FlatList
+                                    data={recentTests.slice((currentPageTests - 1) * ITEMS_PER_PAGE, currentPageTests * ITEMS_PER_PAGE)}
+                                    renderItem={renderRecentTest}
+                                    keyExtractor={item => item.id}
+                                    numColumns={isLandscape ? 3 : 2}
+                                    key={isLandscape ? 'landscape' : 'portrait'}
+                                    contentContainerStyle={styles.gridListContent}
+                                />
+                                <View style={styles.paginationContainer}>
+                                    <Pagination
+                                        currentPage={currentPageTests}
+                                        totalItems={recentTests.length}
+                                        itemsPerPage={ITEMS_PER_PAGE}
+                                        onPageChange={setCurrentPageTests}
+                                    />
+                                </View>
+                            </>
+                        ) : (
+                            <FlatList
+                                data={recentTests.slice(0, 4)}
+                                renderItem={renderRecentTest}
+                                keyExtractor={item => item.id}
+                                numColumns={isLandscape ? 3 : 2}
+                                key={isLandscape ? 'landscape' : 'portrait'}
+                                contentContainerStyle={styles.gridListContent}
+                            />
+                        )}
                     </View>
                 </>
             )}
@@ -377,6 +461,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flex: 1,
         marginHorizontal: 4,
+        width: 'auto',
     },
     headerSubtext: {
         color: '#ffffff',
@@ -412,35 +497,35 @@ const styles = StyleSheet.create({
         paddingHorizontal: 5,
     },
     resultCard: {
-        marginLeft: 15,
-        borderRadius: 16,
+        marginLeft: moderateScale(15),
+        borderRadius: moderateScale(16),
         overflow: 'hidden',
         elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
-    },
-    resultGradient: {
-        padding: 20,
-    },
-    resultTitle: {
+      },
+      resultGradient: {
+        padding: moderateScale(20),
+      },
+      resultTitle: {
         fontWeight: '700',
         color: '#ffffff',
-        marginBottom: 12,
-    },
-    resultDetails: {
-        marginTop: 8,
-    },
-    resultText: {
+        marginBottom: moderateScale(12),
+      },
+      resultDetails: {
+        marginTop: moderateScale(8),
+      },
+      resultText: {
         color: '#ffffff',
         opacity: 0.9,
-        marginBottom: 4,
-    },
-    scoreText: {
+        marginBottom: moderateScale(4),
+      },
+      scoreText: {
         fontWeight: '700',
         opacity: 1,
-    },
+      },
     vocabCard: {
         flex: 1,
         margin: 8,

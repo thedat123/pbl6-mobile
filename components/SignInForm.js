@@ -99,7 +99,6 @@ const SignInForm = (props) => {
             }
           );
           console.log('Token Response:', tokenResponse.data);
-          // Save token and navigate
           await AsyncStorage.setItem('token', tokenResponse.data.access_token);
           navigation.navigate('MainAppNavigator');
         } catch (error) {
@@ -226,15 +225,6 @@ const SignInForm = (props) => {
           <Text style={styles.buttonText}>Log in</Text>
         </TouchableOpacity>
       )}
-
-      {/* Google Login Button */}
-      <TouchableOpacity
-        style={styles.socialButton}
-        onPress={() => promptAsync()} // Triggers Google sign-in flow
-      >
-        <Ionicons name="logo-google" size={24} color="white" />
-        <Text style={styles.socialText}>Login with Google</Text>
-      </TouchableOpacity>
     </View>
   );
 };

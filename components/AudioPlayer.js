@@ -1,4 +1,3 @@
-// AudioPlayer.js
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Audio } from 'expo-av';
@@ -10,20 +9,21 @@ const AudioPlayer = ({ audioUri }) => {
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(0);
   const [isReady, setIsReady] = useState(false);
+  const [hasEnded, setHasEnded] = useState(false);
   const soundRef = useRef(null);
 
   useEffect(() => {
     const loadAudio = async () => {
-      try {
-        const { sound } = await Audio.Sound.createAsync({ uri: audioUri }, { shouldPlay: false }, onPlaybackStatusUpdate);
-        soundRef.current = sound;
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          setDuration(status.durationMillis / 1000);
-          setIsReady(true);
-        }
-      } catch (error) {
-        Alert.alert("Error", "Unable to load audio. Please try again.");
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: false },
+        onPlaybackStatusUpdate
+      );
+      soundRef.current = sound;
+      const status = await sound.getStatusAsync();
+      if (status.isLoaded) {
+        setDuration(status.durationMillis / 1000);
+        setIsReady(true);
       }
     };
 
@@ -41,28 +41,49 @@ const AudioPlayer = ({ audioUri }) => {
       setIsPlaying(status.isPlaying);
       if (status.didJustFinish) {
         setIsPlaying(false);
-        soundRef.current?.setPositionAsync(0);
+        setHasEnded(true);
+        setPosition(duration);
       }
     }
   };
 
   const handlePlayPause = async () => {
     if (!soundRef.current || !isReady) return;
+  
     try {
       const status = await soundRef.current.getStatusAsync();
+  
+      if (hasEnded) {
+        await soundRef.current.unloadAsync();
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioUri },
+          { shouldPlay: true },
+          onPlaybackStatusUpdate
+        );
+        soundRef.current = sound;
+        setHasEnded(false);
+        setIsPlaying(true);
+        return;
+      }
+  
       if (status.isPlaying) {
-        await soundRef.current.setStatusAsync({ shouldPlay: false })
+        soundRef.current.setStatusAsync({ shouldPlay: false });
       } else {
-        await soundRef.current.setStatusAsync({ shouldPlay: true })
+        soundRef.current.setStatusAsync({ shouldPlay: true });
       }
     } catch (error) {
       Alert.alert("Error", "Unable to play audio. Please try again.");
     }
-  };
+  };  
 
   const handleSeek = async (value) => {
-    if (soundRef.current) {
-      await soundRef.current.setPositionAsync(value * 1000);
+    if (soundRef.current && isReady) {
+      try {
+        await soundRef.current.setPositionAsync(value * 1000);
+        setHasEnded(false);
+      } catch (error) {
+        console.error("Error seeking audio:", error);
+      }
     }
   };
 
@@ -76,7 +97,11 @@ const AudioPlayer = ({ audioUri }) => {
     <View style={styles.audioPlayerContainer}>
       <View style={styles.audioControls}>
         <TouchableOpacity onPress={handlePlayPause} disabled={!isReady}>
-          <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="#000000" />
+          <Ionicons 
+            name={hasEnded ? "reload" : (isPlaying ? "pause" : "play")} 
+            size={24} 
+            color="#000000" 
+          />
         </TouchableOpacity>
         <Slider
           style={styles.slider}
