@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, ScrollView, Animated, Image } from 'react-native';
-import { ProgressCircle } from 'react-native-svg-charts';
+import Svg, { Circle, G } from 'react-native-svg';
 import { LineChart } from 'react-native-chart-kit';
 import { useMemo, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,7 +46,40 @@ const VocabResultScreen = ({ route }) => {
   const [correctCurrentPage, setCorrectCurrentPage] = useState(1);
   const [incorrectCurrentPage, setIncorrectCurrentPage] = useState(1);
 
+  const ProgressCircle = ({ progress, size = 180, strokeWidth = 15, progressColor = '#4CAF50', backgroundColor = '#E8F5E9' }) => {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const strokeDashoffset = circumference - (progress * circumference);
+  
+    return (
+      <Svg width={size} height={size}>
+        <G rotation="-90" origin={`${size / 2}, ${size / 2}`}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={backgroundColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={progressColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+          />
+        </G>
+      </Svg>
+    );
+  };
+
   useEffect(() => {
+    console.log(results);
     const targetProgress = maxCorrectAnswers / (totalQuestions / 2);
     progressAnimation.addListener(({ value }) => {
       setProgress(value);
@@ -230,8 +263,7 @@ const VocabResultScreen = ({ route }) => {
             </View>
           </View>
         ))}
-  
-        {/* Pagination Section */}
+
         <View style={styles.paginationContainer}>
           <Pagination
             currentPage={currentPage}
@@ -292,12 +324,12 @@ const VocabResultScreen = ({ route }) => {
 
         <View style={styles.resultCard}>
           <View style={styles.progressContainer}>
-            <ProgressCircle
-              style={styles.progressCircle}
+          <ProgressCircle
               progress={progress}
-              progressColor={'#4CAF50'}
-              backgroundColor={'#E8F5E9'}
+              size={180}
               strokeWidth={15}
+              progressColor="#4CAF50"
+              backgroundColor="#E8F5E9"
             />
             <View style={styles.progressTextContainer}>
               <Text style={styles.progressPercentage}>{Math.round((maxCorrectAnswers / (totalQuestions / 2)) * 100)}%</Text>
@@ -338,23 +370,23 @@ const VocabResultScreen = ({ route }) => {
         </View>
 
         {!loading && (
-          <>
-            {detailedWords.correct.length > 0 &&
-              renderWordDetails(
-                detailedWords.correct,
-                'correct',
-                correctCurrentPage,
-                setCorrectCurrentPage
-              )}
-            {detailedWords.incorrect.length > 0 &&
-              renderWordDetails(
-                detailedWords.incorrect,
-                'incorrect',
-                incorrectCurrentPage,
-                setIncorrectCurrentPage
-              )}
-          </>
-        )}
+        <>
+          {detailedWords.correct.length > 0 &&
+            renderWordDetails(
+              detailedWords.correct,
+              'correct',
+              correctCurrentPage,
+              setCorrectCurrentPage
+            )}
+          {detailedWords.incorrect.length > 0 &&
+            renderWordDetails(
+              detailedWords.incorrect,
+              'incorrect',
+              incorrectCurrentPage,
+              setIncorrectCurrentPage
+            )}
+        </>
+      )}
 
         <View style={styles.actionButtons}>
           <TouchableOpacity style={[styles.button, styles.reviewButton]} onPress={handleNavigateLearn}>

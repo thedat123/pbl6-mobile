@@ -17,12 +17,11 @@ import {
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { Platform } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Input from '../components/Input';
 import { API_BASE_URL } from '@env';
 
-const DEFAULT_AVATAR = require('../assets/images/Settings/default-user-avatar.png');
+const DEFAULT_AVATAR = Image.resolveAssetSource(require('../assets/images/Settings/default-user-avatar.png')).uri;
 
 const SettingsScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('Profile');
@@ -136,42 +135,19 @@ const SettingsScreen = ({ navigation }) => {
       const data = await response.json();
   
       const updateFields = {};
-      if (formData.fullName && formData.fullName !== '' && formData.fullName !== data?.name) {
+      if (formData.fullName && formData.fullName !== data?.name) {
         updateFields.name = formData.fullName;
       }
-      if (formData.email && formData.email !== '' && formData.email !== data?.email) {
+      if (formData.email && formData.email !== data?.email) {
         updateFields.email = formData.email;
       }
-      if (formData.phone && formData.phone !== '' && formData.phone !== data?.phone) {
+      if (formData.phone && formData.phone !== data?.phone) {
         updateFields.phone = formData.phone;
       }
   
-      if (formData.avatar) {
-        if (formData.avatar.includes('res.cloudinary.com')) {
-          const publicIdMatch = formData.avatar.match(/\/v\d+\/([^.]+)\./);
-          if (publicIdMatch && publicIdMatch[1]) {
-            if (formData.avatar !== data.avatar) {
-              updateFields.avatar = await convertToBase64(formData.avatar);
-            }
-          } else {
-            console.error('Could not extract public ID from Cloudinary URL');
-          }
-        } 
-        else if (formData.avatar.startsWith('file://') || formData.avatar.startsWith('data:')) {
-          try {
-            const base64Image = formData.avatar.startsWith('file://') 
-              ? await convertToBase64(formData.avatar) 
-              : formData.avatar;
-            
-            if (base64Image !== data.avatar) {
-              updateFields.avatar = base64Image;
-            }
-          } catch (conversionError) {
-            showAlert('Error', 'Failed to process avatar image', 'error');
-            setIsLoading(false);
-            return;
-          }
-        }
+      // Only send avatar if it's a new image
+      if (formData.avatar && formData.avatar !== data.avatar) {
+        updateFields.avatar = formData.avatar;
       }
   
       if (Object.keys(updateFields).length === 0) {
@@ -223,16 +199,26 @@ const SettingsScreen = ({ navigation }) => {
         showAlert('Permission Required', 'Please enable photo library access', 'error');
         return;
       }
-
+  
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 1,
       });
-
+  
       if (!result.canceled) {
-        setProfileImage({ uri: result.assets[0].uri });
+        const newImageUri = result.assets[0].uri;
+  
+        // Convert selected image to Base64 format
+        const base64Image = await convertToBase64(newImageUri);
+  
+        // Update profile image preview and formData
+        setProfileImage({ uri: newImageUri });
+        setFormData((prevData) => ({
+          ...prevData,
+          avatar: base64Image,
+        }));
       }
     } catch (error) {
       showAlert('Error', 'Failed to select image', 'error');
@@ -248,38 +234,6 @@ const SettingsScreen = ({ navigation }) => {
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
-  };
-  
-  const handleProfileImageChange = async (newImageUri) => {
-    try {
-      if (typeof newImageUri === 'string' && newImageUri !== '') {
-        // If it's an HTTP URL, just set it directly
-        if (newImageUri.startsWith('http')) {
-          setProfileImage({ uri: newImageUri });
-          setFormData((prevData) => ({
-            ...prevData,
-            avatar: newImageUri,
-          }));
-        } 
-        // If it's a local file, convert to Base64
-        else if (newImageUri.startsWith('file://')) {
-          const base64Image = await convertToBase64(newImageUri);
-          setProfileImage({ uri: base64Image });
-          setFormData((prevData) => ({
-            ...prevData,
-            avatar: base64Image,
-          }));
-        }
-      } else {
-        setProfileImage(DEFAULT_AVATAR);
-        setFormData((prevData) => ({
-          ...prevData,
-          avatar: DEFAULT_AVATAR,
-        }));
-      }
-    } catch (error) {
-      showAlert('Error', 'Failed to convert image to Base64', 'error');
-    }
   };
 
   const handleLogout = () => {

@@ -1,103 +1,72 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
-import ImageViewing from 'react-native-image-viewing'; // Make sure you have installed this package
-import { QuestionNumber, QuestionOptions } from '../components/QuestionTest'; // Ensure these components are defined
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
+import ImageViewing from 'react-native-image-viewing';
+import axios from 'axios';
+import { QuestionNumber, QuestionOptions } from '../components/QuestionTest';
+import { API_BASE_URL } from '@env';
 
-const TestPart7 = forwardRef(({ onQuestionStatusChange }, ref) => {
-  const [questionStatus, setQuestionStatus] = useState({});
+const TestPart7 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
+  const [questionData, setQuestionData] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [questionStatus, setQuestionStatus] = useState({});
   const [isImageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [startTime, setStartTime] = useState(null);
 
-  useEffect(() => {
-    setStartTime(Date.now());
-  }, []);
+  const fetchTestPartData = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/v1/test/${testId}`);
+      if (response.status === 200) {
+        const testData = response.data;
 
-  const questionData = [
-    {
-      imageUrl: "https://lh6.googleusercontent.com/xaeQedCrz-uD-_tJEOcLFQtAj2k1nIdQcKTyNSP9_iM9h4VHkInFqgYYCIr7jw1q_6ja4zjIS6-gyPJPJa4VS80pwDkeBL3NzCzESM9-S6p-qp3Aepd_4WY1PZ1QT0_FnAy38se9",
-      questions: [
-        {
-          id: 147,
-          questionText: "What is indicated about TriStar Sports Gear?",
-          options: [
-            { label: "A", text: "It is a family business.", isCorrect: true },
-            { label: "B", text: "It is located next to a school.", isCorrect: false },
-            { label: "C", text: "It holds a sale every year.", isCorrect: false },
-            { label: "D", text: "It mainly sells weight training equipment.", isCorrect: false }
-          ],
-          correctAnswer: 'A'
-        },
-        {
-          id: 148,
-          questionText: "How can customers receive a discount on athletic shoes?",
-          options: [
-            { label: "A", text: "By buying more than two pairs", isCorrect: true },
-            { label: "B", text: "By visiting on July 1", isCorrect: false },
-            { label: "C", text: "By placing an order online", isCorrect: false },
-            { label: "D", text: "By presenting a flyer", isCorrect: false }
-          ],
-          correctAnswer: 'A'
-        }
-      ],
-    },
-    {
-      imageUrl: "https://lh6.googleusercontent.com/xaeQedCrz-uD-_tJEOcLFQtAj2k1nIdQcKTyNSP9_iM9h4VHkInFqgYYCIr7jw1q_6ja4zjIS6-gyPJPJa4VS80pwDkeBL3NzCzESM9-S6p-qp3Aepd_4WY1PZ1QT0_FnAy38se9",
-      questions: [
-        {
-          id: 135,
-          questionText: "What does XYZ Company signify?",
-          options: [
-            { label: "A", text: "growing", isCorrect: true },
-            { label: "B", text: "shrinking", isCorrect: false },
-            { label: "C", text: "stable", isCorrect: false },
-            { label: "D", text: "declining", isCorrect: false }
-          ],
-          correctAnswer: 'A'
-        },
-        {
-          id: 136,
-          questionText: "What is a fact about XYZ Company?",
-          options: [
-            { label: "A", text: "XYZ Company has been serving the community for over 20 years." },
-            { label: "B", text: "We are new to the area." },
-            { label: "C", text: "We have been facing financial difficulties." },
-            { label: "D", text: "XYZ Company is on the verge of closing down." }
-          ],
-          correctAnswer: 'A'
-        },
-      ],
+        const part7Questions = testData.groupQuestions.filter(group => group.part?.key === 'part7');
+
+        const transformedQuestions = part7Questions.map(group => ({
+          imageUrl: group.imageUrl, // Replace with correct property from your API
+          questions: group.questions.map(q => ({
+            id: q.id,
+            questionText: q.question,
+            options: q.answer.map((answer, index) => ({
+              label: String.fromCharCode(65 + index),
+              text: answer,
+              isCorrect: q.correctAnswer === answer,
+            })),
+            correctAnswer: q.correctAnswer,
+          })),
+        }));
+
+        setQuestionData(transformedQuestions);
+        setStartTime(Date.now());
+        setIsLoading(false);
+      } else {
+        throw new Error('Failed to fetch test data');
+      }
+    } catch (err) {
+      setError(err.message);
+      setIsLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchTestPartData();
+  }, [testId]);
 
   const handleSelectAnswer = (questionId, option) => {
-    setAnswers((prev) => ({ 
-      ...prev, 
-      [questionId]: option 
-    }));
-    
-    const newStatus = { 
-      [questionId]: option ? 'answered' : 'viewed' 
-    };
-    
-    setQuestionStatus((prev) => ({ 
-      ...prev, 
-      ...newStatus 
-    }));
-    
+    setAnswers((prev) => ({ ...prev, [questionId]: option }));
+    const newStatus = { [questionId]: option ? 'answered' : 'viewed' };
+    setQuestionStatus((prev) => ({ ...prev, ...newStatus }));
     if (onQuestionStatusChange) {
       onQuestionStatusChange(newStatus);
     }
   };
 
   useImperativeHandle(ref, () => ({
-    getQuestionData: () => questionData,
-    getQuestionStatus: () => questionStatus,
     getAnswers: () => answers,
-    getTestDuration: () => {
-      return Math.floor((Date.now() - startTime) / 1000);
-    }
+    getQuestionStatus: () => questionStatus,
+    getTestDuration: () => Math.floor((Date.now() - startTime) / 1000),
+    getQuestionData: () => questionData,
   }));
 
   const openImageViewer = (imageUrl) => {
@@ -105,18 +74,34 @@ const TestPart7 = forwardRef(({ onQuestionStatusChange }, ref) => {
     setImageViewerVisible(true);
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2196F3" />
+        <Text>Loading test data...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Error: {error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchTestPartData}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {questionData.map((item, index) => (
           <View key={index} style={styles.questionBlock}>
-            {/* Image Section */}
             <TouchableOpacity onPress={() => openImageViewer(item.imageUrl)} style={styles.imageContainer}>
-                <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="contain" />
-
+              <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="contain" />
             </TouchableOpacity>
-
-            {/* Questions Section */}
             {item.questions.map((question) => (
               <View key={question.id} style={styles.questionContainer}>
                 <QuestionNumber number={question.id} />
@@ -130,8 +115,6 @@ const TestPart7 = forwardRef(({ onQuestionStatusChange }, ref) => {
           </View>
         ))}
       </ScrollView>
-
-      {/* Image Viewer Modal */}
       <ImageViewing
         images={[{ uri: selectedImage }]}
         imageIndex={0}
@@ -143,38 +126,22 @@ const TestPart7 = forwardRef(({ onQuestionStatusChange }, ref) => {
 });
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  scrollView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  scrollView: { flex: 1 },
   questionBlock: {
     backgroundColor: 'white',
     marginBottom: 20,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
     elevation: 5,
-    overflow: 'hidden',
   },
-  imageContainer: {
-    height: 250,
-    backgroundColor: '#f8f8f8',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  questionContainer: {
-    padding: 16,
-  },
+  imageContainer: { height: 250, backgroundColor: '#f8f8f8' },
+  image: { width: '100%', height: '100%' },
+  questionContainer: { padding: 16 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { color: 'red', marginBottom: 16 },
+  retryButton: { padding: 10, backgroundColor: '#2196F3', borderRadius: 5 },
+  retryButtonText: { color: '#FFFFFF' },
 });
 
 export default TestPart7;

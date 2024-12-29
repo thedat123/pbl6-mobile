@@ -12,7 +12,7 @@ const TimeCounter = ({ initialTime = 10, onTimeOut, isTestComplete }) => {
 
   useEffect(() => {
     let intervalId;
-    
+
     const playTickSound = async () => {
       try {
         if (!tickSoundRef.current) {
@@ -21,7 +21,7 @@ const TimeCounter = ({ initialTime = 10, onTimeOut, isTestComplete }) => {
             { shouldPlay: true }
           );
           tickSoundRef.current = sound;
-          
+
           tickSoundRef.current.setOnPlaybackStatusUpdate((status) => {
             if (status.didJustFinish) {
               tickSoundRef.current?.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
@@ -35,33 +35,34 @@ const TimeCounter = ({ initialTime = 10, onTimeOut, isTestComplete }) => {
         console.error("Error playing tick sound:", error);
       }
     };
-    
-    // Stop timer if test is complete
+
+    // Dừng timer nếu bài test đã hoàn thành
     if (isTestComplete) {
-      return () => {
-        if (tickSoundRef.current) {
-          tickSoundRef.current.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
-          tickSoundRef.current = null;
-        }
-      };
+      if (tickSoundRef.current) {
+        tickSoundRef.current.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
+        tickSoundRef.current = null;
+      }
+      return;
     }
 
+    // Bắt đầu timer
     if (timer > 0) {
       intervalId = setInterval(() => {
-        setTimer((prevTimer) => prevTimer - 1);
-        playTickSound();
+        setTimer((prevTimer) => {
+          const newTimer = prevTimer - 1;
+          if (newTimer > 0) playTickSound();
+          return newTimer;
+        });
       }, 1000);
     } else {
       onTimeOut();
     }
-    
+
     return () => {
       clearInterval(intervalId);
-      
-      // Properly clean up the sound on component unmount
       if (tickSoundRef.current) {
         tickSoundRef.current.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
-        tickSoundRef.current = null; // Reset reference after cleanup
+        tickSoundRef.current = null; // Đặt lại tham chiếu
       }
     };
   }, [timer, onTimeOut, isTestComplete]);
@@ -98,8 +99,6 @@ const TimeCounter = ({ initialTime = 10, onTimeOut, isTestComplete }) => {
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   timerContainer: {

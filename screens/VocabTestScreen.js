@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, SafeAreaView, StyleSheet, TouchableOpacity, Text, Animated, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView } from 'react-native';
+import { View, SafeAreaView, StyleSheet, TouchableOpacity, Text, Animated, Dimensions, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
 import TimeCounter from '../components/TimeCounter';
 import QuestionVocab from '../components/QuestionVocab';
@@ -59,6 +59,7 @@ const VocabTestScreen = ({ route }) => {
 
   const [startTime, setStartTime] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [isTestRunning, setIsTestRunning] = useState(true);
 
     const imagePaths = [
       require('../assets/images/Vocab/voca-persons/1/correct.gif'),
@@ -109,6 +110,56 @@ const VocabTestScreen = ({ route }) => {
       }),
     ]).start();
   };
+
+   const [modal, setModal] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        onConfirm: () => {},
+        showCancel: false,
+  });
+
+  const AlertModal = React.memo(({ modal, setModal }) => (
+    <Modal
+      transparent
+      visible={modal.visible}
+      animationType="fade"
+      onRequestClose={() => setModal(prev => ({ ...prev, visible: false }))}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={[styles.modalHeader, styles[`${modal.type}Header`]]}>
+            <Text style={styles.modalTitle}>{modal.title}</Text>
+          </View>
+          <View style={styles.modalBody}>
+            <Text style={styles.modalMessage}>{modal.message}</Text>
+          </View>
+          <View style={styles.modalFooter}>
+            {modal.showCancel && (
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setModal(prev => ({ ...prev, visible: false }))}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={[styles.modalButton, styles.modalConfirmButton]}
+              onPress={() => {
+                setModal(prev => ({ ...prev, visible: false }));
+                modal.onConfirm();
+              }}
+            >
+              <Text style={styles.modalButtonText}>
+                {modal.type === 'danger' ? 'Logout' : 'OK'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  ));
 
   const handleSpeak = async (audioUri) => {
     if (audioUri) {
@@ -260,7 +311,6 @@ const VocabTestScreen = ({ route }) => {
             }
         };
 
-        // Generate at least one writing question
         const generateWriting = (type) => {
             switch (type) {
                 case 'writing-translate':
@@ -343,7 +393,6 @@ const VocabTestScreen = ({ route }) => {
             }
         };
 
-        // Ensure we generate one question of each type
         questionTypes.forEach((type) => {
             if (!multipleChoiceQuestion) {
                 multipleChoiceQuestion = generateMultipleChoice(type);
@@ -353,7 +402,6 @@ const VocabTestScreen = ({ route }) => {
             }
         });
 
-        // If a question type doesn't exist, fallback to another type.
         if (!multipleChoiceQuestion) {
             multipleChoiceQuestion = generateMultipleChoice(QUESTION_TYPES[Math.floor(Math.random() * QUESTION_TYPES.length)]);
         }
@@ -580,11 +628,21 @@ const VocabTestScreen = ({ route }) => {
     isAnswerSubmitted.current = false; 
   }, [topicId]);
 
+  const showAlert = (title, message, type, showCancel = false, onConfirm = () => {}) => {
+    setModal({ visible: true, title, message, type, showCancel, onConfirm });
+  };
+
   const handleClose = () => {
-    Alert.alert("Xác nhận thoát", "Bạn có chắc muốn kết thúc bài kiểm tra?", [
-      { text: "Hủy", style: "cancel" },
-      { text: "Đồng ý", onPress: () => navigation.goBack() },
-    ]);
+    showAlert(
+      "Confirm Exit", 
+      "Are you sure you want to end the test?", 
+      "warning", 
+      true, 
+      () => {
+        setIsTestRunning(false);
+        navigation.navigate("VocabWaitScreen", { topicId: topicId });
+      }
+    );
   };  
 
   if (loading) {
@@ -618,6 +676,7 @@ const VocabTestScreen = ({ route }) => {
               >
                 <AntDesign name="close" size={20} color="#FFF" />
               </TouchableOpacity>
+              <AlertModal modal={modal} setModal={setModal} />
               
               <View style={styles.progressWrapper}>
                 <Text style={styles.questionCounter}>
@@ -639,13 +698,14 @@ const VocabTestScreen = ({ route }) => {
               </View>
               
               <View style={styles.timerContainer}>
-                <TimeCounter
-                  key={currentQuestionIndex}
-                  initialTime={20}
-                  onTimeOut={handleTimeOut}
-                  isTestComplete={currentQuestionIndex === questions.length - 1}
-                  style={styles.timer}
-                />
+                {isTestRunning && (
+                  <TimeCounter
+                    key={currentQuestionIndex}
+                    initialTime={20}
+                    onTimeOut={handleTimeOut}
+                    isTestComplete={currentQuestionIndex === questions.length - 1}
+                  />
+                )}
               </View>
             </View>
   
@@ -732,134 +792,137 @@ const styles = StyleSheet.create({
   // Base Layout
   safeArea: {
     flex: 1,
-    backgroundColor: '#F7F9FC', // Softer, more modern background
+    backgroundColor: '#F8FAFD', // Slightly lighter, easier on the eyes
   },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
-
-  // Header Styles
+  
+  // Header Section
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20, // Slightly larger radius for softer look
+    borderRadius: 16,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 6,
-    marginBottom: 20,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
+  
+  // Close Button
   closeButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FF6B6B',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-
+  
   // Progress Tracking
   progressWrapper: {
     flex: 1,
-    marginHorizontal: 20,
+    marginHorizontal: 16,
   },
   questionCounter: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#2C3E50', // Slightly darker for better contrast
+    color: '#1A2C4B', // Darker for better readability
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
+    letterSpacing: 0.3,
   },
   progressBarContainer: {
-    height: 10, // Slightly thicker
-    backgroundColor: '#E8EDF3',
-    borderRadius: 5,
+    height: 8,
+    backgroundColor: '#EDF1F7',
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#4CAF50', // More vibrant green
-    borderRadius: 5,
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
   },
-
+  
   // Timer Styles
   timerContainer: {
-    backgroundColor: '#FFFFFF', // White background for depth
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderRadius: 15,
-    minWidth: 80,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    minWidth: 70,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   timer: {
-    fontSize: 19,
-    fontWeight: 'bold',
-    color: '#34495E', // Rich, deep color
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#2D3748',
+    letterSpacing: 0.5,
   },
-
-  // Content Containers
+  
   contentContainer: {
-    flex: 1,
+    marginTop: 8,
   },
   questionImageAndTextContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20, // Larger radius for softer edges
-    padding: 25,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   questionMediaContainer: {
     flexDirection: 'column',
     alignItems: 'center',
     width: '100%',
+    gap: 16,
   },
   questionImage: {
     width: '100%',
     aspectRatio: 1,
-    maxWidth: 350,
-    maxHeight: 350,
-    borderRadius: 20,
-    marginBottom: 20,
-    resizeMode: 'cover', // Ensures image covers entire area nicely
+    maxWidth: 320,
+    maxHeight: 320,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFD', // Placeholder background
   },
   questionTextContainer: {
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 12,
   },
-
+  
   // Answer Sections
   answerSection: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   multipleChoice: {
     flex: 1,
@@ -867,22 +930,100 @@ const styles = StyleSheet.create({
   writingSection: {
     flex: 1,
   },
-
-  wordContentContainer: {
-    backgroundColor: '#F7F9FC', // Light background color for the card
-    borderRadius: 20,            // Rounded corners
-    padding: 20,                 // Padding inside the card
-    marginTop: 20,               // Space above the card
-    shadowColor: '#000',         // Shadow color
-    shadowOffset: { width: 0, height: 4 }, // Shadow direction
-    shadowOpacity: 0.1,          // Shadow transparency
-    shadowRadius: 10,            // Shadow spread
-    elevation: 5,                // For Android shadow
-    borderWidth: 1,              // Optional: add border around the card
-    borderColor: '#E0E0E0',      // Light border color
-    marginBottom: 10
-  },
   
+  // Word Content Container
+  wordContentContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#EDF1F7',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    padding: 20,
+    alignItems: 'center',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  modalHeaderError: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderSuccess: {
+    backgroundColor: '#34A853',
+  },
+  modalHeaderDanger: {
+    backgroundColor: '#EA4335',
+  },
+  modalHeaderWarning: {
+    backgroundColor: '#FBBC04',
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  modalBody: {
+    padding: 24,
+    backgroundColor: '#fff',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#1A1A1A',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8EAED',
+  },
+  modalButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#34A853',
+  },
+  modalCancelButton: {
+    backgroundColor: '#EA4335',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 export default VocabTestScreen;

@@ -66,12 +66,15 @@ const TopicCard = ({ item, onPress }) => {
             <Text style={styles.topicTitle}>{item.name}</Text>
             <View style={styles.progressWrapper}>
               <View style={styles.progressBarBackground}>
-                <LinearGradient
-                  colors={['#4CAF50', '#81C784']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.progressBar, { width: '35%' }]}
-                />
+              <LinearGradient
+                colors={['#4CAF50', '#81C784']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[
+                  styles.progressBar,
+                  { width: `${item.progress || 0}%` },
+                ]}
+              />
               </View>
               <Text style={styles.progressText}>
                 {item.listWord?.length || 0} vocabs
@@ -155,12 +158,18 @@ const TopicModal = ({ visible, topic, onClose, navigation }) => {
                     {renderButton(
                       'REVIEW',
                       ['#4CAF50', '#2E7D32'],
-                      () => navigation.navigate('VocabTestScreen', { topicId: topic.id })
+                      () => {
+                        onClose();
+                        navigation.navigate('VocabTestScreen', { topicId: topic.id }); // Điều hướng sau
+                      }
                     )}
                     {renderButton(
                       'CONTINUE LEARNING',
                       ['#FF9800', '#F57C00'],
-                      () => navigation.navigate('VocabLearnScreen', { topicId: topic.id })
+                      () => {
+                        onClose();
+                        navigation.navigate('VocabLearnScreen', { topicId: topic.id })
+                      } 
                     )}
                     {renderButton(
                       'VIEW RESULTS',
@@ -168,8 +177,7 @@ const TopicModal = ({ visible, topic, onClose, navigation }) => {
                       async () => {
                         const savedResults = await AsyncStorage.getItem('latestVocabResults');
                         const parsedResults = savedResults ? JSON.parse(savedResults) : null;
-
-                        console.log('Parsed results:', parsedResults);
+                        onClose();
 
                         navigation.navigate('VocabResultScreen', {
                           results: parsedResults.results || [],
@@ -464,7 +472,16 @@ const VocabDetailScreen = ({ route }) => {
 
           const userData = await userResponse.json();
           setSelectedTopic(userData);
-          setTopics(userData.topics || []);
+
+          const updatedTopics = userData.topics.map((topic) => {
+            const totalWords = topic.listWord?.length || 0;
+            const retainedWords = topic.retainedWord || 0;
+            const progress = totalWords > 0 ? (retainedWords / totalWords) * 100 : 0;
+  
+            return { ...topic, progress };
+          });
+  
+          setTopics(updatedTopics);
 
           let learnedLessons = 0;
           let unlearnedLessons = 0;
@@ -568,7 +585,7 @@ const VocabDetailScreen = ({ route }) => {
             />
 
             <View style={styles.statsContainer}>
-              <Text style={styles.sectionTitle}>Tiến độ học tập</Text>
+              <Text style={styles.sectionTitle}>Study Progress</Text>
               <View style={styles.statsGrid}>
                 {stats.map((stat, index) => (
                   <StatBox key={index} {...stat} />

@@ -45,16 +45,13 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.engflash.app",
-      "jsEngine": "hermes",
-      "googleServicesFile": "./google-services.json"
+      "jsEngine": "hermes"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-asset",
-      "expo-facebook",
-      "expo-google-sign-in"
+      "expo-asset"
     ],
     "extra": {
       "eas": {
