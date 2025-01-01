@@ -13,38 +13,49 @@ import Pagination from '../components/Pagination';
 const { width } = Dimensions.get('window');
 const ITEMS_PER_PAGE = 4;
 const VocabResultScreen = ({ route }) => {
-  const { results, totalQuestions, topicId, topicName, totalTime } = route.params;
+  const { 
+    topicId, 
+    topicName, 
+    results, 
+    totalQuestions, 
+    totalTime 
+  } = route.params;
+
+  // Navigation and state
   const navigation = useNavigation();
   const [progress, setProgress] = useState(0);
   const progressAnimation = useMemo(() => new Animated.Value(0), []);
   const [detailedWords, setDetailedWords] = useState({ correct: [], incorrect: [] });
-  const uniqueWords = useMemo(() => {
-    return Array.isArray(results) ? [...new Set(results.map(r => r.currentIdQuestion))] : [];
-  }, [results]);
-  
-  const correctWords = useMemo(() => {
-    return uniqueWords.filter(wordId =>
-      results
-        .filter(r => r.currentIdQuestion === wordId)
-        .every(r => r.isCorrect)
-    );
-  }, [uniqueWords, results]);
-  
-  const incorrectWords = useMemo(() => {
-    return uniqueWords.filter(wordId => !correctWords.includes(wordId));
-  }, [uniqueWords, correctWords]);  
-
-  const correctAnswers = correctWords.length;
-  const incorrectAnswers = incorrectWords.length;
-  const maxCorrectAnswers = correctAnswers;
-
-  const [history, setHistory] = useState([]);
-  const [historyId, setHistoryId] = useState(null);
-  const [detailedResult, setDetailedResult] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const [correctCurrentPage, setCorrectCurrentPage] = useState(1);
   const [incorrectCurrentPage, setIncorrectCurrentPage] = useState(1);
+  const [corrects, setCorrects] = useState([]);
+  const [inCorrects, setInCorrects] = useState([]);
+  const [maxCorrectAnswers, setMaxCorrectAnswers] = useState(0);
+
+  const uniqueWords = useMemo(() => {
+    return results ? [...new Set(results.map(r => r.currentIdQuestion))] : [];
+  }, [results]);
+
+  const correctWords = useMemo(() => {
+    if (!results) return [];
+    return uniqueWords.filter(wordId => {
+      const attempts = results.filter(r => r.currentIdQuestion === wordId);
+      return attempts.length > 0 && attempts.every(attempt => attempt.isCorrect);
+    });
+  }, [uniqueWords, results]);
+
+  const incorrectWords = useMemo(() => {
+    if (!results) return [];
+    return uniqueWords.filter(wordId => !correctWords.includes(wordId));
+  }, [uniqueWords, correctWords]);
+
+  const correctAnswers =
+  correctWords && correctWords.length > 0 ? correctWords.length : corrects.length;
+
+  const incorrectAnswers =
+  incorrectWords && incorrectWords.length > 0 ? incorrectWords.length : inCorrects.length;
+  const totalQuestion = correctAnswers + incorrectAnswers;
 
   const ProgressCircle = ({ progress, size = 180, strokeWidth = 15, progressColor = '#4CAF50', backgroundColor = '#E8F5E9' }) => {
     const radius = (size - strokeWidth) / 2;
@@ -79,72 +90,150 @@ const VocabResultScreen = ({ route }) => {
   };
 
   useEffect(() => {
-    console.log(results);
-    const targetProgress = maxCorrectAnswers / (totalQuestions / 2);
-    progressAnimation.addListener(({ value }) => {
-      setProgress(value);
-    });
+    if (results) {
+      const targetProgress = correctAnswers / totalQuestion;
+      progressAnimation.addListener(({ value }) => {
+        setProgress(value);
+      });
 
-    Animated.timing(progressAnimation, {
-      toValue: targetProgress,
-      duration: 1500,
-      useNativeDriver: false,
-    }).start();
+      Animated.timing(progressAnimation, {
+        toValue: targetProgress,
+        duration: 1500,
+        useNativeDriver: false,
+      }).start();
 
-    return () => progressAnimation.removeAllListeners();
-  }, [progressAnimation, maxCorrectAnswers, totalQuestions]);
+      return () => progressAnimation.removeAllListeners();
+    }
+  }, [progressAnimation, correctAnswers, totalQuestion, results]);
 
+  // API Functions
+  const saveResultsToApi = async () => {
+    if (!results) return;
 
-  useEffect(() => {
-    const saveResultsToApi = async () => {
-      const requestData = {
-        idTopic: topicId,
-        time: totalTime,
-        listCorrectWord: [...new Set(correctWords)],
-        listIncorrectWord: [...new Set(incorrectWords)],
-      };
+    const requestData = {
+      idTopic: topicId,
+      time: totalTime,
+      listCorrectWord: correctWords,
+      listIncorrectWord: incorrectWords,
+    };
 
+    try {
       const token = await AsyncStorage.getItem('token');
-
       const response = await fetch(`${API_BASE_URL}:3001/api/v1/topic-history/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify(requestData),
       });
 
       if (!response.ok) throw new Error('Failed to save results');
+      fetchLatestResults();
+    } catch (error) {
+      console.error('Error saving results:', error);
+      fetchLatestResults();
+    }
+  };
+
+  const fetchLatestResults = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(
+        `${API_BASE_URL}:3001/api/v1/topic-history/topic/${topicId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+  
+      if (!response.ok) throw new Error('Failed to fetch topic history');
+  
       const data = await response.json();
-      setHistoryId(data.id);
+  
+      const maxCorrectAnswers = data.reduce((max, item) => {
+        return Math.max(max, item.correctWord?.length || 0);
+      }, 0);
 
-      await AsyncStorage.setItem('latestVocabResults', JSON.stringify({
-        correctWords,
-        incorrectWords,
-        totalTime,
-        results,
-      }));
-    };
+      setMaxCorrectAnswers(maxCorrectAnswers);
+  
+      const latestHistory = data.sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      )[0];
+  
+      if (latestHistory) {
+        setDetailedWords({
+          correct: latestHistory.correctWord || [],
+          incorrect: latestHistory.incorrectWord || [],
+        });
+  
+        setCorrects(latestHistory.correctWord || []);
+        setInCorrects(latestHistory.incorrectWord || []);
+  
+        if (!results) {
+          const totalWords =
+            (latestHistory.correctWord || []).length +
+            (latestHistory.incorrectWord || []).length;
+          const progressValue = latestHistory.correctWord.length / totalWords;
+  
+          progressAnimation.addListener(({ value }) => {
+            setProgress(value);
+          });
+  
+          Animated.timing(progressAnimation, {
+            toValue: progressValue,
+            duration: 1500,
+            useNativeDriver: false,
+          }).start();
+        }
+      }
+  
+      // Log hoặc sử dụng maxCorrectAnswers
+      console.log('Max Correct Answers:', maxCorrectAnswers);
+    } catch (error) {
+      console.error('Error fetching latest topic history:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
 
-    saveResultsToApi();
-  }, [correctWords, results, topicId, totalTime]);
+  // Effects
+  useEffect(() => {
+    if (results) {
+      saveResultsToApi();
+    } else {
+      fetchLatestResults();
+    }
+  }, [results, correctWords, incorrectWords, topicId, totalTime]);
 
   useEffect(() => {
     const getDetailedWords = () => {
-      const correct = results
-        .filter(r => correctWords.includes(r.currentIdQuestion))
-        .map(r => ({
-          word: r.word,
-          meaning: r.meaning,
-          id: r.currentIdQuestion,
-        }));
-  
-      const incorrect = results
-        .filter(r => incorrectWords.includes(r.currentIdQuestion))
-        .map(r => ({
-          word: r.word,
-          meaning: r.meaning,
-          id: r.currentIdQuestion,
-        }));
-  
+      const correct = uniqueWords
+        .filter(wordId => correctWords.includes(wordId))
+        .map(wordId => {
+          const wordResult = results.find(r => r.currentIdQuestion === wordId);
+          return {
+            word: wordResult.word,
+            meaning: wordResult.meaning,
+            id: wordId,
+          };
+        });
+    
+      const incorrect = uniqueWords
+        .filter(wordId => incorrectWords.includes(wordId))
+        .map(wordId => {
+          const wordResult = results.find(r => r.currentIdQuestion === wordId);
+          return {
+            word: wordResult.word,
+            meaning: wordResult.meaning,
+            id: wordId,
+          };
+        });
+    
       setDetailedWords({
         correct: [...new Set(correct.map(JSON.stringify))].map(JSON.parse),
         incorrect: [...new Set(incorrect.map(JSON.stringify))].map(JSON.parse),
@@ -152,41 +241,12 @@ const VocabResultScreen = ({ route }) => {
       setLoading(false);
     };
   
-    getDetailedWords();
-  }, [results, correctWords, incorrectWords]);  
-
-  useEffect(() => {
-    if (historyId) {
-      const fetchDetailedResults = async () => {
-        try {
-          const token = await AsyncStorage.getItem('token');
-          const response = await fetch(
-            `${API_BASE_URL}:3001/api/v1/topic-history/${historyId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-            }
-          );
-          if (!response.ok) throw new Error('Failed to fetch detailed results');
-          const data = await response.json();
-  
-          setDetailedWords({
-            correct: data.correctWord || [],
-            incorrect: data.incorrectWord || [],
-          });
-  
-          setLoading(false);
-        } catch (error) {
-          console.error('Error fetching detailed results:', error);
-        }
-      };
-  
-      fetchDetailedResults();
+    if (results) {
+      getDetailedWords();
     }
-  }, [historyId]);  
+  }, [results, correctWords, incorrectWords, uniqueWords]);
 
+  // Handler Functions
   const handleNavigateHome = () => {
     navigation.dispatch(
       CommonActions.reset({
@@ -197,24 +257,45 @@ const VocabResultScreen = ({ route }) => {
   };
 
   const handleSpeak = async (audioUri) => {
-      if (audioUri) {
-        try {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: audioUri },
-            { shouldPlay: true }
-          );
-    
-          sound.setOnPlaybackStatusUpdate((status) => {
-            if (status.didJustFinish) {
-              sound.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
-            }
-          });
-        } catch (error) {
-          console.error('Error playing audio:', error);
-        }
+    if (audioUri) {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioUri },
+          { shouldPlay: true }
+        );
+  
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.didJustFinish) {
+            sound.unloadAsync().catch((err) => 
+              console.error("Error unloading sound:", err)
+            );
+          }
+        });
+      } catch (error) {
+        console.error('Error playing audio:', error);
       }
+    }
   };
 
+  const handleNavigateTest = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'VocabTestScreen', params: { topicId: topicId } }],
+      })
+    );
+  };
+
+  const handleNavigateLearn = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'VocabLearnScreen', params: { topicId: topicId } }],
+      })
+    );
+  };
+
+  // Render Functions
   const renderWordDetails = (words, type, currentPage, setCurrentPage) => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const currentWords = words.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -275,39 +356,17 @@ const VocabResultScreen = ({ route }) => {
       </View>
     );
   };
-  
-
-  const handleNavigateTest = () => {
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'VocabTestScreen', params: { topicId: topicId } }],
-      })
-    );
-  };
-
-  const handleNavigateLearn = () => {
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'VocabLearnScreen', params: { topicId: topicId } }],
-      })
-    );
-  };
-
-  const bestScore = useMemo(() => Math.max(...history, 0), [history]);
-  const chartData = [0, bestScore, maxCorrectAnswers];
 
   const renderProgressStats = () => (
     <View style={styles.statsContainer}>
       <View style={styles.statItem}>
-        <Text style={styles.statLabel}>Words Learned</Text>
+        <Text style={styles.statLabel}>Correct</Text>
         <Text style={styles.statValue}>{correctAnswers}</Text>
         <Text style={styles.statSubtext}>vocabulary</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Text style={styles.statLabel}>Words Not Learned</Text>
+        <Text style={styles.statLabel}>Incorrect</Text>
         <Text style={styles.statValue}>{incorrectAnswers}</Text>
         <Text style={styles.statSubtext}>vocabulary</Text>
       </View>
@@ -316,7 +375,10 @@ const VocabResultScreen = ({ route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer} 
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Test Results</Text>
           <Text style={styles.subtitle}>Topic: {topicName}</Text>
@@ -324,7 +386,7 @@ const VocabResultScreen = ({ route }) => {
 
         <View style={styles.resultCard}>
           <View style={styles.progressContainer}>
-          <ProgressCircle
+            <ProgressCircle
               progress={progress}
               size={180}
               strokeWidth={15}
@@ -332,7 +394,9 @@ const VocabResultScreen = ({ route }) => {
               backgroundColor="#E8F5E9"
             />
             <View style={styles.progressTextContainer}>
-              <Text style={styles.progressPercentage}>{Math.round((maxCorrectAnswers / (totalQuestions / 2)) * 100)}%</Text>
+              <Text style={styles.progressPercentage}>
+                {Math.round((correctAnswers / totalQuestion) * 100)}%
+              </Text>
               <Text style={styles.progressLabel}>Completed</Text>
             </View>
           </View>
@@ -344,7 +408,7 @@ const VocabResultScreen = ({ route }) => {
           <LineChart
             data={{
               labels: ['0', 'Best Score', 'Current Score'],
-              datasets: [{ data: chartData }],
+              datasets: [{ data: [0, maxCorrectAnswers, correctAnswers] }],
             }}
             width={width - 60}
             height={180}
@@ -370,32 +434,41 @@ const VocabResultScreen = ({ route }) => {
         </View>
 
         {!loading && (
-        <>
-          {detailedWords.correct.length > 0 &&
-            renderWordDetails(
-              detailedWords.correct,
-              'correct',
-              correctCurrentPage,
-              setCorrectCurrentPage
-            )}
-          {detailedWords.incorrect.length > 0 &&
-            renderWordDetails(
-              detailedWords.incorrect,
-              'incorrect',
-              incorrectCurrentPage,
-              setIncorrectCurrentPage
-            )}
-        </>
-      )}
+          <>
+            {detailedWords.correct.length > 0 &&
+              renderWordDetails(
+                detailedWords.correct,
+                'correct',
+                correctCurrentPage,
+                setCorrectCurrentPage
+              )}
+            {detailedWords.incorrect.length > 0 &&
+              renderWordDetails(
+                detailedWords.incorrect,
+                'incorrect',
+                incorrectCurrentPage,
+                setIncorrectCurrentPage
+              )}
+          </>
+        )}
 
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={[styles.button, styles.reviewButton]} onPress={handleNavigateLearn}>
+          <TouchableOpacity 
+            style={[styles.button, styles.reviewButton]} 
+            onPress={handleNavigateLearn}
+          >
             <Text style={styles.reviewButtonText}>Learn Again</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.retryButton]} onPress={handleNavigateTest}>
+          <TouchableOpacity 
+            style={[styles.button, styles.retryButton]} 
+            onPress={handleNavigateTest}
+          >
             <Text style={styles.retryButtonText}>Retake Test</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.backButton]} onPress={handleNavigateHome}>
+          <TouchableOpacity 
+            style={[styles.button, styles.backButton]} 
+            onPress={handleNavigateHome}
+          >
             <Text style={styles.retryButtonText}>Return Home</Text>
           </TouchableOpacity>
         </View>

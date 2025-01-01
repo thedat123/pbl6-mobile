@@ -23,6 +23,8 @@ const TestScreen = () => {
   const [searchText, setSearchText] = useState('');
   const navigation = useNavigation();
   const [currentPage, setCurrentPage] = useState(1);
+  const [tags, setTags] = useState([]);
+  const [selectedTag, setSelectedTag] = useState(null);
   const ITEMS_PER_PAGE = 4;
 
   useEffect(() => {
@@ -32,6 +34,16 @@ const TestScreen = () => {
         return;
     }
   }, []);   
+
+  const handleTagPress = (tag) => {
+    if (selectedTag?.id === tag.id) {
+      setSelectedTag(null);
+      setSearchText('');
+    } else {
+      setSelectedTag(tag);
+      setSearchText(tag.name);
+    }
+  };
 
   const fetchTests = useCallback(async () => {
     try {
@@ -56,7 +68,21 @@ const TestScreen = () => {
 
   useEffect(() => {
     fetchTests();
-  }, [fetchTests]);
+    fetchTags();
+  }, [fetchTests, fetchTags]);
+
+  const fetchTags = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}:3001/api/v1/tag?type=test_type`);
+      console.log(response);
+      if (response.status === 200) {
+        const tags = response.data;
+        setTags(tags);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleTestPress = (test) => {
     navigation.navigate('TestSubject', { id: test.id, test });
@@ -110,6 +136,50 @@ const TestScreen = () => {
     );
   };
 
+  const renderTags = () => {
+    if (tags.length === 0) {
+      return null;
+    }
+  
+    return (
+      <View style={styles.tagContainer}>
+        <Text style={styles.tagSectionTitle}>Filter by Category:</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          contentContainerStyle={styles.tagList}
+        >
+          {tags.map((tag) => {
+            const isSelected = selectedTag?.id === tag.id;
+            return (
+              <TouchableOpacity 
+                key={tag.id} 
+                style={[
+                  styles.tagChip,
+                  isSelected && styles.tagChipSelected
+                ]}
+                onPress={() => handleTagPress(tag)}
+              >
+                <Feather 
+                  name={isSelected ? "check-circle" : "tag"} 
+                  size={14} 
+                  color={isSelected ? "#FFFFFF" : "#007AFF"} 
+                  style={styles.tagIcon}
+                />
+                <Text style={[
+                  styles.tagText,
+                  isSelected && styles.tagTextSelected
+                ]}>
+                  {tag.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+  };
+  
   const renderContent = () => {
     if (loading) {
       return (
@@ -143,21 +213,21 @@ const TestScreen = () => {
   
     return (
       <ScrollView 
-      contentContainerStyle={[styles.testList, { paddingBottom: 100 }]} // Adjust padding for better spacing
-      showsVerticalScrollIndicator={false}
-    >
-      {paginatedTests.map(renderTestItem)}
-      <View style={styles.paginationContainer}>
-        <Pagination
-          currentPage={currentPage}
-          totalItems={totalFilteredTests}
-          itemsPerPage={ITEMS_PER_PAGE}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
-      </View>
-    </ScrollView>
-    
+        contentContainerStyle={[styles.testList, { paddingBottom: 100 }]} 
+        showsVerticalScrollIndicator={false}
+      >
+        {renderTags()}
+        {paginatedTests.map(renderTestItem)}
+        <View style={styles.paginationContainer}>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalFilteredTests}
+            itemsPerPage={ITEMS_PER_PAGE}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </View>
+      </ScrollView>
     );
   };  
 
@@ -346,6 +416,64 @@ const styles = StyleSheet.create({
   paginationContainer: {
     paddingHorizontal: 20,
     paddingTop: 8,
+  },
+  tagList: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginVertical: 8,
+  },
+  tagChip: {
+    backgroundColor: '#E6F2FF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+  },
+  tagText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  tagContainer: {
+    marginBottom: 16,
+  },
+  tagSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 16,
+    marginBottom: 8,
+  },
+  tagList: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F7FF',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E6F2FF',
+  },
+  tagChipSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  tagIcon: {
+    marginRight: 6,
+  },
+  tagText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  tagTextSelected: {
+    color: '#FFFFFF',
   },
 });
 

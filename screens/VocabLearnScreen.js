@@ -293,10 +293,18 @@ const VocabLearnScreen = ({ route }) => {
         }
   
         const data = await response.json();
-        setFolders([
-          ...folders,
-          { name: newFolderName, description: newFolderDescription, wordCount: 0 },
-        ]);
+        const createdFolder = {
+          id: data.id,
+          name: newFolderName,
+          description: newFolderDescription,
+          wordCount: 0,
+        };
+  
+        setFolders([...folders, createdFolder]);
+  
+        setEditingFolder(createdFolder);
+        setEditedFolderName(createdFolder.name);
+  
         setNewFolderName('');
         setNewFolderDescription('');
         setCreateFolderModalVisible(false);
@@ -308,6 +316,7 @@ const VocabLearnScreen = ({ route }) => {
       showAlert('Error', 'Please enter a folder name.', 'error');
     }
   };
+    
 
   const loadFolderData = async () => {
     const token = await AsyncStorage.getItem('token');

@@ -59,7 +59,7 @@ const AlertModal = React.memo(({ modal, setModal }) => (
             }}
           >
             <Text style={styles.modalButtonText}>
-              {modal.type === 'danger' ? 'Logout' : 'OK'}
+              {modal.type === 'danger' ? 'Try Again' : 'OK'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -193,8 +193,10 @@ const TestBase = () => {
             testId,
             time: mergedResults.duration,
             userAnswer: userAnswers,
-            isFullTest: true,
+            isFullTest: selectedParts.length === 7,
           };
+
+          console.log(dataToSend);
   
           const token = await AsyncStorage.getItem("token");
           if (!token) {

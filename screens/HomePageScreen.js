@@ -113,10 +113,14 @@ const HomePageScreen = () => {
                 const data = await response.json();
                 const processedData = data.lastPractice.map((practice) => ({
                     id: practice.id,
-                    title: practice.test.name,
+                    title: practice.test ? practice.test.name : 'Unknown Test',
                     date: new Date(practice.createdAt).toLocaleDateString(),
                     score: practice.LCScore + practice.RCScore,
                 }));
+    
+                console.log(processedData);
+                console.log("---------------------");
+    
                 setLastPracticeResults(processedData);
             }
         } catch (error) {
@@ -124,6 +128,7 @@ const HomePageScreen = () => {
             setError('Unable to load practice results.');
         }
     };
+    
 
     const fetchUsernameFromToken = async () => {
         try {
@@ -160,22 +165,27 @@ const HomePageScreen = () => {
             
             const data = await response.json();
             
-            const { data: vocabGroupsData, first, last, limit, total } = data;
+            const { data: vocabGroupsData } = data;
     
             const processedData = vocabGroupsData.map(group => ({
-                ...group,
-                topics: group.topics || [],
-                topicsCount: group.topics ? group.topics.length : 0,
+                id: group.id || '',
+                name: group.name || 'Unknown Name',
+                level: group.level || 'unknown',
+                description: group.description || '',
+                thumbnail: group.thumbnail || 'https://via.placeholder.com/150',
+                topicsCount: group.topicsCount || 0,
                 userCount: group.userCount || 0,
             }));
     
-            setVocabGroups(processedData); // Set the vocab groups state
+            setVocabGroups(processedData);
             await AsyncStorage.setItem('vocabGroups', JSON.stringify(processedData));
             await AsyncStorage.setItem('lastUpdated', Date.now().toString());
         } catch (error) {
+            console.error('Error fetching vocab groups:', error);
             setError('Unable to load vocabulary groups');
         }
     };
+    
     
 
     const fetchLastRecentTest = async () => {
@@ -230,6 +240,8 @@ const HomePageScreen = () => {
     );
 
     const renderVocabSet = ({ item }) => {
+        if (!item || !item.name) return null;
+    
         const levelConfig = LEVELS.find((l) => l.id === item.level) || LEVELS[0];
     
         return (
@@ -243,7 +255,7 @@ const HomePageScreen = () => {
                 >
                     <View style={styles.vocabImageContainer}>
                         <Image 
-                            source={{ uri: item.thumbnail }} 
+                            source={{ uri: item.thumbnail }}
                             style={styles.thumbnail}
                             defaultSource={require('../assets/placeholder.png')}
                         />
@@ -257,7 +269,7 @@ const HomePageScreen = () => {
                     </View>
     
                     <View style={styles.vocabContent}>
-                        <Text style={styles.vocabTitle} numberOfLines={2}>{item.name}</Text>
+                        <Text style={styles.vocabTitle} numberOfLines={2}>{item.name || 'Unnamed Group'}</Text>
     
                         <View style={styles.vocabStats}>
                             <View style={styles.topicCount}>
@@ -281,7 +293,8 @@ const HomePageScreen = () => {
                 </TouchableOpacity>
             </Animated.View>
         );
-    };    
+    };
+        
 
     const renderRecentTest = ({ item }) => (
         <TouchableOpacity style={[styles.testCard, { width: gridColumnWidth }]}>

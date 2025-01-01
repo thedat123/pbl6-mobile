@@ -38,6 +38,7 @@ import ListenTest from '../screens/ListenTest';
 import ListenTestPractice from '../screens/ListenTestPractice';
 import ListenTestResult from '../screens/ListenTestResult';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import TestPart7Answer from '../screens/TestPart7Answer';
 
 
 const Stack = createStackNavigator();
@@ -359,6 +360,16 @@ const MainAppRoute = () => {
         component={TestPart6Answer}
         options={{ 
           title: "Test Part 6 Detail Screen",
+          headerBackImage: () => (
+            <Ionicons name="arrow-back" size={28} color="#000" />
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="TestPart7Answer"
+        component={TestPart7Answer}
+        options={{ 
+          title: "Test Part 7 Detail Screen",
           headerBackImage: () => (
             <Ionicons name="arrow-back" size={28} color="#000" />
           ),

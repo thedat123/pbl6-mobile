@@ -172,22 +172,16 @@ const TopicModal = ({ visible, topic, onClose, navigation }) => {
                       } 
                     )}
                     {renderButton(
-                      'VIEW RESULTS',
-                      ['#FF5722', '#D84315'],
-                      async () => {
-                        const savedResults = await AsyncStorage.getItem('latestVocabResults');
-                        const parsedResults = savedResults ? JSON.parse(savedResults) : null;
-                        onClose();
-
-                        navigation.navigate('VocabResultScreen', {
-                          results: parsedResults.results || [],
-                          totalQuestions: (parsedResults?.correctWords.length || 0) + (parsedResults?.incorrectWords.length || 0),
-                          topicId: topic.id,
-                          topicName: topic.name,
-                          totalTime: parsedResults?.totalTime || 0,                         
-                        });
-                      }
-                    )}
+  'VIEW RESULTS',
+  ['#FF5722', '#D84315'],
+  () => {
+    onClose();
+    navigation.navigate('VocabResultScreen', {
+      topicId: topic.id,
+      topicName: topic.name,
+    });
+  }
+)}
                   </>
                 ) : (
                   renderButton(

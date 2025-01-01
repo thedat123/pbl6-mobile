@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   picker: {
-    height: 50,
+    height: 60,
   },
   startButton: {
     position: 'absolute',

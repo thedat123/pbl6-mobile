@@ -1,40 +1,41 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import ImageViewing from 'react-native-image-viewing';
 import axios from 'axios';
 import { QuestionNumber, QuestionOptions } from '../components/QuestionTest';
 import { API_BASE_URL } from '@env';
 
-const TestPart7 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
+const TestPart7 = forwardRef(({ onQuestionStatusChange, testId, onQuestionLayout, questionRefs }, ref) => {
   const [questionData, setQuestionData] = useState([]);
   const [answers, setAnswers] = useState({});
   const [questionStatus, setQuestionStatus] = useState({});
-  const [isImageViewerVisible, setImageViewerVisible] = useState(false);
-  const [selectedImage, setSelectedImage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [startTime, setStartTime] = useState(null);
+  const groupRefs = useRef({});
 
   const fetchTestPartData = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/v1/test/${testId}`);
+      const response = await axios.get(`${API_BASE_URL}:3001/api/v1/test/${testId}`);
       if (response.status === 200) {
         const testData = response.data;
 
         const part7Questions = testData.groupQuestions.filter(group => group.part?.key === 'part7');
 
         const transformedQuestions = part7Questions.map(group => ({
-          imageUrl: group.imageUrl, // Replace with correct property from your API
+          id: group.id,
+          imageUrl: group.image[0]?.url || null,
           questions: group.questions.map(q => ({
             id: q.id,
-            questionText: q.question,
+            questionNumber: q.questionNumber,
+            question: q.question,
             options: q.answer.map((answer, index) => ({
               label: String.fromCharCode(65 + index),
               text: answer,
               isCorrect: q.correctAnswer === answer,
             })),
             correctAnswer: q.correctAnswer,
-          })),
+          })).sort((a, b) => a.questionNumber - b.questionNumber),
         }));
 
         setQuestionData(transformedQuestions);
@@ -53,10 +54,39 @@ const TestPart7 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
     fetchTestPartData();
   }, [testId]);
 
+  const measureQuestionPosition = (groupId, questionId, event) => {
+    if (!groupRefs.current[groupId]) {
+      groupRefs.current[groupId] = { position: 0, questions: {} };
+    }
+
+    const layout = event.nativeEvent.layout;
+    groupRefs.current[groupId].questions[questionId] = layout.y;
+
+    const absolutePosition = groupRefs.current[groupId].position + layout.y;
+    if (onQuestionLayout) {
+      onQuestionLayout(questionId, { nativeEvent: { layout: { y: absolutePosition } } });
+    }
+  };
+
+  const measureGroupPosition = (groupId, event) => {
+    const layout = event.nativeEvent.layout;
+    if (!groupRefs.current[groupId]) {
+      groupRefs.current[groupId] = { position: 0, questions: {} };
+    }
+    groupRefs.current[groupId].position = layout.y;
+
+    Object.entries(groupRefs.current[groupId].questions).forEach(([questionId, questionY]) => {
+      const absolutePosition = layout.y + questionY;
+      if (onQuestionLayout) {
+        onQuestionLayout(questionId, { nativeEvent: { layout: { y: absolutePosition } } });
+      }
+    });
+  };
+
   const handleSelectAnswer = (questionId, option) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: option }));
+    setAnswers(prev => ({ ...prev, [questionId]: option }));
     const newStatus = { [questionId]: option ? 'answered' : 'viewed' };
-    setQuestionStatus((prev) => ({ ...prev, ...newStatus }));
+    setQuestionStatus(prev => ({ ...prev, ...newStatus }));
     if (onQuestionStatusChange) {
       onQuestionStatusChange(newStatus);
     }
@@ -68,11 +98,6 @@ const TestPart7 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
     getTestDuration: () => Math.floor((Date.now() - startTime) / 1000),
     getQuestionData: () => questionData,
   }));
-
-  const openImageViewer = (imageUrl) => {
-    setSelectedImage(imageUrl);
-    setImageViewerVisible(true);
-  };
 
   if (isLoading) {
     return (
@@ -97,16 +122,26 @@ const TestPart7 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
-        {questionData.map((item, index) => (
-          <View key={index} style={styles.questionBlock}>
-            <TouchableOpacity onPress={() => openImageViewer(item.imageUrl)} style={styles.imageContainer}>
-              <Image source={{ uri: item.imageUrl }} style={styles.image} resizeMode="contain" />
-            </TouchableOpacity>
-            {item.questions.map((question) => (
-              <View key={question.id} style={styles.questionContainer}>
-                <QuestionNumber number={question.id} />
+        {questionData.map(group => (
+          <View
+            key={group.id}
+            style={styles.groupWrapper}
+            onLayout={event => measureGroupPosition(group.id, event)}
+          >
+            {group.imageUrl && (
+              <TouchableOpacity style={styles.imageContainer}>
+                <Image source={{ uri: group.imageUrl }} style={styles.image} resizeMode="contain" />
+              </TouchableOpacity>
+            )}
+            {group.questions.map(question => (
+              <View
+                key={question.id}
+                style={styles.questionWrapper}
+                onLayout={event => measureQuestionPosition(group.id, question.id, event)}
+              >
+                <QuestionNumber number={question.questionNumber} />
                 <QuestionOptions
-                  question={{ id: question.id, question: question.questionText, options: question.options }}
+                  question={{ id: question.id, question: question.question, options: question.options }}
                   selectedAnswer={answers[question.id]}
                   onAnswerSelect={handleSelectAnswer}
                 />
@@ -115,15 +150,10 @@ const TestPart7 = forwardRef(({ onQuestionStatusChange, testId }, ref) => {
           </View>
         ))}
       </ScrollView>
-      <ImageViewing
-        images={[{ uri: selectedImage }]}
-        imageIndex={0}
-        visible={isImageViewerVisible}
-        onRequestClose={() => setImageViewerVisible(false)}
-      />
     </SafeAreaView>
   );
 });
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },

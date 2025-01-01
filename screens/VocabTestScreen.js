@@ -538,39 +538,39 @@ const VocabTestScreen = ({ route }) => {
   const handleAnswer = async (isCorrect) => {
     if (isAnswerSubmitted.current) return;
     isAnswerSubmitted.current = true;
-    
+
     setProgress((prev) => Math.min(prev + 1 / totalQuestions, 1));
     setShowCorrectAnswer(true);
     setTimeout(() => {
-      setAnswered(true);
-    
-      setTimeout(() => {
-        moveToNextQuestion();
-      }, 2000);
-    }, 2000); 
-  
-    setResults((prevResults) => [
-      ...prevResults,
-      { currentIdQuestion: currentIdQuestion, questionIndex: currentQuestionIndex, isCorrect },
-    ]);
-  
+        setAnswered(true);
+
+        setTimeout(() => {
+            moveToNextQuestion(isCorrect); // Truyền kết quả đúng/sai
+        }, 2000);
+    }, 2000);
+
+    const newResult = { currentIdQuestion: currentIdQuestion, questionIndex: currentQuestionIndex, isCorrect };
+    setResults((prevResults) => [...prevResults, newResult]); // Thêm kết quả vào trạng thái
+
     const imagePath = isCorrect ? imagePaths[currentImageIndex] : failImagePaths[currentImageIndex];
     setImageSource(imagePath);
-  
+
     try {
-      const soundFile = isCorrect ? require('../assets/audio/right_answer.mp3') : require('../assets/audio/wrong_answer.mp3');
-      const { sound } = await Audio.Sound.createAsync(soundFile, { shouldPlay: true });
-      tickSound.current = sound;
-  
-      await handleSpeak(currentQuestion.audioUri);
-  
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
-        }
-      });
+        const soundFile = isCorrect
+            ? require('../assets/audio/right_answer.mp3')
+            : require('../assets/audio/wrong_answer.mp3');
+        const { sound } = await Audio.Sound.createAsync(soundFile, { shouldPlay: true });
+        tickSound.current = sound;
+
+        await handleSpeak(currentQuestion.audioUri);
+
+        sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.didJustFinish) {
+                sound.unloadAsync().catch((err) => console.error("Error unloading sound:", err));
+            }
+        });
     } catch (error) {
-      console.error("Error handling answer sound:", error);
+        console.error("Error handling answer sound:", error);
     }
   };
     
@@ -584,38 +584,45 @@ const VocabTestScreen = ({ route }) => {
     }
   };
 
-  const moveToNextQuestion = () => {
+  const moveToNextQuestion = (lastAnswer = null) => {
     if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
     }
-  
+
+    if (lastAnswer !== null) {
+        const newResult = { currentIdQuestion: currentIdQuestion, questionIndex: currentQuestionIndex, isCorrect: lastAnswer };
+        const updatedResults = [...results, newResult]; // Đồng bộ kết quả cuối cùng
+        setResults(updatedResults); // Cập nhật kết quả vào trạng thái
+    }
+
     animateTransition();
-  
+
     const randomImageIndex = Math.floor(Math.random() * totalImages);
     setCurrentImageIndex(randomImageIndex);
     setImageSource(defaultImagePaths[randomImageIndex]);
-  
+
     if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-      setShowCorrectAnswer(false);
-      setSelectedAnswer(null);
-      isAnswerSubmitted.current = false;
-      setAnswered(false);
+        setCurrentQuestionIndex((prev) => prev + 1);
+        setShowCorrectAnswer(false);
+        setSelectedAnswer(null);
+        isAnswerSubmitted.current = false;
+        setAnswered(false);
     } else {
-      const endTime = Date.now();
-      const totalTime = Math.floor((endTime - startTime) / 1000); // in seconds
-      setElapsedTime(totalTime);
-  
-      setTimeout(() => {
-        navigation.navigate("VocabResultScreen", {
-          topicId,
-          results,
-          totalQuestions,
-          topicName,
-          totalTime, 
-        });
-      }, 500);
+        const endTime = Date.now();
+        const totalTime = Math.floor((endTime - startTime) / 1000); // in seconds
+        setElapsedTime(totalTime);
+
+        setTimeout(() => {
+            const finalResults = lastAnswer !== null ? [...results, { currentIdQuestion, questionIndex: currentQuestionIndex, isCorrect: lastAnswer }] : results;
+            navigation.navigate("VocabResultScreen", {
+                topicId,
+                results: finalResults,
+                totalQuestions,
+                topicName,
+                totalTime,
+            });
+        }, 500);
     }
   };
 
